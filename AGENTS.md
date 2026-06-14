@@ -17,6 +17,24 @@
 
 ---
 
+## Start of Every Task — MANDATORY FIRST STEP
+
+Before writing a single line of code, run this sync sequence:
+
+```bash
+git fetch origin
+git checkout main
+git pull origin main --ff-only
+git log --oneline HEAD -3
+```
+
+Verify that `HEAD` matches `origin/main`. If they diverge — stop and resolve before proceeding.
+
+This is non-negotiable. Skipping this step causes stale file errors where the agent
+cannot find files that exist on remote but not locally.
+
+---
+
 ## Safety Rules (check before every action)
 
 - Never access files outside the current workspace
@@ -159,6 +177,7 @@ NEVER:
 - Use any type in TypeScript
 - Render stub/placeholder buttons (if feature not ready — omit the button)
 - Hardcode theme colors (use Tailwind dark: classes)
+- Start a task without first running git pull origin main --ff-only
 ```
 
 ---
