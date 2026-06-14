@@ -2,12 +2,5 @@
   "appId": "com.archimedes.app",
   "appName": "Archimedes",
   "webDir": "out",
-  "bundledWebRuntime": false,
-  "plugins": {},
-  "android": {
-    "icon": "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png"
-  },
-  "ios": {
-    "icon": "ios/App/App/Assets.xcassets/AppIcon.appiconset/icon-1024x1024@1x.png"
-  }
+  "plugins": {}
 }
