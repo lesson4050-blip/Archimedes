@@ -120,26 +120,26 @@ async function main() {
   console.log('\n--- Generating Web Icons ---');
   
   // favicon PNGs
-  await renderIcon(16, path.join(__dirname, '../public/favicon-16x16.png'));
-  await renderIcon(32, path.join(__dirname, '../public/favicon-32x32.png'));
+  await renderIcon(16, path.join(__dirname, '../web/public/favicon-16x16.png'));
+  await renderIcon(32, path.join(__dirname, '../web/public/favicon-32x32.png'));
   
   // favicon ICO
   const fav16 = await sharp(logoIconPath).resize(16, 16).png({ quality: 85 }).toBuffer();
   const fav32 = await sharp(logoIconPath).resize(32, 32).png({ quality: 85 }).toBuffer();
   const faviconIco = packIco([fav16, fav32], [16, 32]);
-  const faviconIcoPath = path.join(__dirname, '../public/favicon.ico');
+  const faviconIcoPath = path.join(__dirname, '../web/public/favicon.ico');
   ensureDir(faviconIcoPath);
   fs.writeFileSync(faviconIcoPath, faviconIco);
   console.log(`Generated multi-resolution ICO: ${faviconIcoPath}`);
 
   // Next.js standard icons
-  await renderIcon(180, path.join(__dirname, '../public/apple-touch-icon.png'));
-  await renderIcon(192, path.join(__dirname, '../public/android-chrome-192x192.png'));
-  await renderIcon(512, path.join(__dirname, '../public/android-chrome-512x512.png'));
-  await renderIcon(150, path.join(__dirname, '../public/mstile-150x150.png'));
+  await renderIcon(180, path.join(__dirname, '../web/public/apple-touch-icon.png'));
+  await renderIcon(192, path.join(__dirname, '../web/public/android-chrome-192x192.png'));
+  await renderIcon(512, path.join(__dirname, '../web/public/android-chrome-512x512.png'));
+  await renderIcon(150, path.join(__dirname, '../web/public/mstile-150x150.png'));
 
   // OG-Image (1200x630, logo-full centered on slate-900 background)
-  const ogPath = path.join(__dirname, '../public/og-image.png');
+  const ogPath = path.join(__dirname, '../web/public/og-image.png');
   ensureDir(ogPath);
   // We want the logo to be centered. Let's make it 600px wide, natural height.
   // We will read logo-full-white.svg and resize to width 600.
@@ -167,6 +167,8 @@ async function main() {
   await renderIcon(64, path.join(__dirname, '../src-tauri/icons/64x64.png'));
   await renderIcon(128, path.join(__dirname, '../src-tauri/icons/128x128.png'));
   await renderIcon(256, path.join(__dirname, '../src-tauri/icons/128x128@2x.png')); // 256x256 named @2x
+  await renderIcon(256, path.join(__dirname, '../src-tauri/icons/256x256.png'));
+  await renderIcon(512, path.join(__dirname, '../src-tauri/icons/icon.png'));
 
   // Windows icon.ico (16, 24, 32, 48, 64, 256)
   const icoSizes = [16, 24, 32, 48, 64, 256];
@@ -212,11 +214,16 @@ async function main() {
   await renderIcon(144, path.join(__dirname, '../android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png'));
   await renderIcon(192, path.join(__dirname, '../android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png'));
   
-  // Android launcher round (uses indigo background)
+  // Android launcher round (uses indigo background) — ALL 5 density buckets
+  await renderIconSolid(48, path.join(__dirname, '../android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png'), primaryColor);
+  await renderIconSolid(72, path.join(__dirname, '../android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png'), primaryColor);
+  await renderIconSolid(96, path.join(__dirname, '../android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png'), primaryColor);
+  await renderIconSolid(144, path.join(__dirname, '../android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png'), primaryColor);
   await renderIconSolid(192, path.join(__dirname, '../android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png'), primaryColor);
 
   // iOS AppIcon.appiconset
   const iosSizes = [
+    { size: 20, scale: 1, name: 'icon-20x20@1x.png' },
     { size: 20, scale: 2, name: 'icon-20x20@2x.png' },
     { size: 20, scale: 3, name: 'icon-20x20@3x.png' },
     { size: 29, scale: 1, name: 'icon-29x29@1x.png' },
