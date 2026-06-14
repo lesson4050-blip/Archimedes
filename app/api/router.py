@@ -50,7 +50,19 @@ async def websocket_endpoint(
         await websocket.close(code=4001, reason="Unauthorized")
         return
 
+    user_id = "default_user"
+    if token:
+        try:
+            from jose import jwt
+            from app.core.config import get_settings
+            settings = get_settings()
+            payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+            user_id = payload.get("sub", "default_user")
+        except Exception:
+            pass
+
     await ws_hub.connect(session_id, websocket)
+    session_manager.get_or_create(session_id, user_id)
     try:
         while True:
             data = await websocket.receive_json()
