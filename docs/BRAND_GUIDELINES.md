@@ -16,14 +16,14 @@ Archimedes stands for clarity, efficiency, and full developer autonomy. The visu
 
 ## 2. Logo Assets
 
-The Archimedes logo consists of a vertical DNA double helix (the Symbol) and the wordmark "archimedes" (the Logotype). All assets are stored under [assets/logos/](file:///d:/archimedes/Archimedes/assets/logos/).
+The Archimedes logo consists of a vertical DNA double helix (the Symbol) and the wordmark "archimedes" (the Logotype). All assets are stored under [assets/logos/](../assets/logos/).
 
 | Asset | Description | Viewport | Usage |
 |---|---|---|---|
-| [logo-full.svg](file:///d:/archimedes/Archimedes/assets/logos/logo-full.svg) | Full logo (Helix + Wordmark) | 878x666 | Main headers, splash screens, landing page. |
-| [logo-icon.svg](file:///d:/archimedes/Archimedes/assets/logos/logo-icon.svg) | Symbol only (DNA Helix) | 542x542 (Square) | App launcher icon, favicons, avatars, sizes < 64px. |
-| [logo-full-white.svg](file:///d:/archimedes/Archimedes/assets/logos/logo-full-white.svg) | Full logo (Inverted White) | 878x666 | Dark backgrounds (Slate-900 / Slate-800). |
-| [logo-icon-white.svg](file:///d:/archimedes/Archimedes/assets/logos/logo-icon-white.svg) | Symbol only (Inverted White) | 542x542 (Square) | App launcher icon for dark UI elements. |
+| [logo-full.svg](../assets/logos/logo-full.svg) | Full logo (Helix + Wordmark) | 878x666 | Main headers, splash screens, landing page. |
+| [logo-icon.svg](../assets/logos/logo-icon.svg) | Symbol only (DNA Helix) | 542x542 (Square) | App launcher icon, favicons, avatars, sizes < 64px. |
+| [logo-full-white.svg](../assets/logos/logo-full-white.svg) | Full logo (Inverted White) | 878x666 | Dark backgrounds (Slate-900 / Slate-800). |
+| [logo-icon-white.svg](../assets/logos/logo-icon-white.svg) | Symbol only (Inverted White) | 542x542 (Square) | App launcher icon for dark UI elements. |
 
 > [!IMPORTANT]
 > **Readability Constraint:** For all rendering sizes **below 64px**, the text wordmark becomes unreadable. In these instances, you **MUST** use the symbol-only version (`logo-icon.svg` or `logo-icon-white.svg`).
