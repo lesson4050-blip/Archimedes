@@ -14,6 +14,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.router import router
 from app.core.config import get_settings
+from app.core.ws_hub import ws_hub
+from app.core.session import session_manager
+import logging
+
+logger = logging.getLogger("app")
 
 
 @asynccontextmanager
@@ -29,6 +34,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     # ── Startup ─────────────────────────────────────────────
     # TODO(phase-1): init SQLite, ChromaDB, WS hub
+    logger.info("WebSocket hub initialized")
     yield
     # ── Shutdown ────────────────────────────────────────────
     # TODO(phase-1): close DB pools, flush logs
