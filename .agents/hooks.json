@@ -1,0 +1,54 @@
+{
+  "hooks": [
+    {
+      "description": "Run mypy on Python files after every write",
+      "event": "after_tool_use",
+      "tool_name": "write_file",
+      "matcher": {
+        "file_pattern": "app/**/*.py"
+      },
+      "command": "mypy {file} --strict --ignore-missing-imports",
+      "on_failure": "warn"
+    },
+    {
+      "description": "Run TypeScript check after every TS/TSX write",
+      "event": "after_tool_use",
+      "tool_name": "write_file",
+      "matcher": {
+        "file_pattern": "web/**/*.{ts,tsx}"
+      },
+      "command": "cd web && npx tsc --noEmit",
+      "on_failure": "warn"
+    },
+    {
+      "description": "Run pytest after any test file write",
+      "event": "after_tool_use",
+      "tool_name": "write_file",
+      "matcher": {
+        "file_pattern": "tests/**/*.py"
+      },
+      "command": "pytest {file} -v --tb=short",
+      "on_failure": "warn"
+    },
+    {
+      "description": "Block direct writes to .env files",
+      "event": "before_tool_use",
+      "tool_name": "write_file",
+      "matcher": {
+        "file_pattern": "**/.env"
+      },
+      "command": "echo 'ERROR: Direct .env write blocked. Use .env.example instead.' && exit 1",
+      "on_failure": "block"
+    },
+    {
+      "description": "Block writes to secrets directory",
+      "event": "before_tool_use",
+      "tool_name": "write_file",
+      "matcher": {
+        "file_pattern": "secrets/**"
+      },
+      "command": "echo 'ERROR: secrets/ directory is protected.' && exit 1",
+      "on_failure": "block"
+    }
+  ]
+}
