@@ -181,3 +181,21 @@ refactor/scope-description
 - shadcn/ui: good but opinionated styles that conflict with our dark design
 - Material UI: too opinionated, large bundle
 - Chakra UI: runtime CSS-in-JS, worse performance
+
+---
+
+## ADR-009: Static export for Next.js in Phase 1
+
+**Date:** 2026-06 | **Status:** Accepted | **Superseded by:** ADR-010 (Phase 2)
+
+**Context:** Capacitor requires `webDir:'out'` (static files). Tauri requires `frontendDist:'../out'`. Both depend on `next build` producing a static `out/` directory rather than the default `.next/` server output.
+
+**Decision:** `output: 'export'` in `web/next.config.js` for Phase 1 only.
+
+**Consequences:**
+- API routes (`app/api/`) disabled — all API calls go directly to FastAPI backend
+- Server Components with data fetching disabled
+- `images.unoptimized: true` required (no Image Optimization server)
+
+**Reversal plan:** Remove `output: 'export'` in Phase 2 when `app/api/` proxy routes to FastAPI are added. See `TODO(phase-2)` comment in `web/next.config.js`.
+
