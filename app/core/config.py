@@ -30,6 +30,10 @@ class Settings(BaseSettings):
 
     # ── Security ────────────────────────────────────────────
     allowed_origins: str = "http://localhost:3000,http://localhost:1420"
+    jwt_secret_key: str = "change-this-to-a-long-random-string-in-production"
+    jwt_algorithm: str = "HS256"
+    jwt_expiry_hours: int = 24
+    admin_api_key: str = "change-this-admin-key"
 
     @property
     def cors_origins(self) -> list[str]:
