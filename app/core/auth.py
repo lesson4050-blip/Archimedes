@@ -28,6 +28,27 @@ def verify_ws_token(token: str | None) -> bool:
         return False
 
 
+def decode_token(token: str) -> dict[str, str] | None:
+    """Decode JWT and return payload dict, or None if invalid.
+
+    Args:
+        token: The raw JWT string.
+
+    Returns:
+        Decoded payload dict, or None on any decode error.
+    """
+    try:
+        settings = get_settings()
+        payload: dict[str, str] = jwt.decode(
+            token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+        )
+        return payload
+    except JWTError:
+        return None
+
+
 def create_access_token(user_id: str) -> str:
     """Create a JWT access token for a given user ID.
 

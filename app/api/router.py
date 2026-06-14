@@ -11,7 +11,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 import asyncio
 
 from app.core.ws_hub import ws_hub
-from app.core.auth import verify_ws_token
+from app.core.auth import verify_ws_token, decode_token
 from app.core.session import SessionManager, session_manager as singleton_session_manager
 
 router = APIRouter()
@@ -46,20 +46,11 @@ async def websocket_endpoint(
         session_manager: The injected SessionManager instance.
     """
     token = websocket.query_params.get("token")
-    if not verify_ws_token(token):
+    payload = decode_token(token) if token else None
+    if payload is None:
         await websocket.close(code=4001, reason="Unauthorized")
         return
-
-    user_id = "default_user"
-    if token:
-        try:
-            from jose import jwt  # type: ignore[import-untyped]
-            from app.core.config import get_settings
-            settings = get_settings()
-            payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-            user_id = payload.get("sub", "default_user")
-        except Exception:
-            pass
+    user_id = str(payload.get("sub", "default_user"))
 
     await ws_hub.connect(session_id, websocket)
     session_manager.get_or_create(session_id, user_id)
@@ -71,6 +62,7 @@ async def websocket_endpoint(
             if msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
             elif msg_type == "task":
+                # TODO(phase-2): store task reference to prevent GC and enable cancellation
                 asyncio.create_task(
                     session_manager.handle_task(session_id, data.get("payload", {}))
                 )

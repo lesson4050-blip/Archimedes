@@ -20,9 +20,6 @@ import logging
 
 logger = logging.getLogger("app")
 
-# Ensure singletons are initialized
-_ = (ws_hub, session_manager)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
