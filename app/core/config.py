@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     app_port: int = 8000
     debug: bool = True
+    ollama_base_url: str = "http://localhost:11434"
+    local_model: str = "qwen3:14b"
 
     # ── Security ────────────────────────────────────────────
     allowed_origins: str = "http://localhost:3000,http://localhost:1420"
