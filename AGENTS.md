@@ -90,6 +90,42 @@ A task is complete when:
 
 ---
 
+## Remote Verification Protocol
+
+This section is MANDATORY. Skipping it is a violation of AGENTS.md.
+
+### After ANY git push or PR update:
+
+Run these commands in order and include their output in your summary:
+
+```bash
+# 1. Confirm commits reached remote
+git log --oneline origin/<branch-name> -5
+
+# 2. Confirm PR reflects the changes
+gh pr view <PR-number> --json files,commits,state | jq '.commits[-3:]'
+```
+
+If either command fails or shows stale data — the task is NOT done.
+Do not write "successfully pushed" until both commands confirm it.
+
+### After ANY claim of "task complete":
+
+Before reporting to the user, self-check:
+- Did I run git push AND verify with git log origin/<branch>?
+- Does the GitHub PR show new commits with updated SHAs?
+- If I only ran commands locally without pushing — the task is NOT complete.
+
+### Forbidden phrases until remote is verified:
+
+NEVER say these until git log origin/<branch> confirms the push:
+- "Successfully pushed"
+- "PR has been updated"
+- "All changes are live"
+- "Task complete"
+
+---
+
 ## Forbidden
 
 ```
