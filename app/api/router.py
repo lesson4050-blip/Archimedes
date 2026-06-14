@@ -53,7 +53,7 @@ async def websocket_endpoint(
     user_id = "default_user"
     if token:
         try:
-            from jose import jwt
+            from jose import jwt  # type: ignore[import-untyped]
             from app.core.config import get_settings
             settings = get_settings()
             payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
