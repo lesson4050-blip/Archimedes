@@ -49,8 +49,10 @@ src-tauri/WixTools/
 *.msi
 
 # Capacitor / Mobile
-android/
-ios/
+android/.gradle/
+android/build/
+ios/Pods/
+ios/App/App/build/
 .gradle/
 *.keystore
 *.jks
@@ -98,3 +100,5 @@ htmlcov/
 .turbo/
 dist/
 build/
+*.tsbuildinfo
+
