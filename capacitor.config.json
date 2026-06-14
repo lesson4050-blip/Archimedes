@@ -1,0 +1,6 @@
+{
+  "appId": "com.archimedes.app",
+  "appName": "Archimedes",
+  "webDir": "out",
+  "plugins": {}
+}
