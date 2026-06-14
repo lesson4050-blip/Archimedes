@@ -11,7 +11,7 @@
 - **Web:** Next.js 15 + React 18 + TypeScript + Tailwind CSS
 - **Desktop:** Tauri v2 (Rust + TypeScript)
 - **Mobile:** Capacitor 6 (TypeScript)
-- **Local LLM:** Qwen 3 27B via Ollama
+- **Local LLM:** Qwen3:14B Q4_K_M via Ollama (fits RTX 3060 12GB)
 - **Vector DB:** ChromaDB
 - **State:** SQLite + aiosqlite
 
@@ -51,6 +51,25 @@
 - Follow existing patterns — don't invent new ones without discussion
 - Module boundaries: agents don't import from core, tools don't import from agents
 - All user input must be validated before reaching business logic
+
+---
+
+## UI Rules
+
+### Theme
+- Dark mode is the default (`bg-slate-900` background)
+- Light mode must be available via theme toggle
+- Use `next-themes` for theme management
+- Never hardcode colors — use Tailwind classes that respect dark: prefix
+- All components must look correct in BOTH dark and light modes
+
+### No Stub Buttons — CRITICAL
+- EVERY button, link, and interactive element must have a real handler
+- If the feature is not implemented yet — DO NOT render the button at all
+- NEVER use: `onClick={() => {}}`, `onClick={console.log}`, `href="#"`, `disabled` as a placeholder
+- "Coming soon" UI is forbidden
+- If a button's feature is out of scope for the current task — omit the button entirely
+- A missing button is always better than a non-functional one
 
 ---
 
@@ -138,6 +157,8 @@ NEVER:
 - Modify files outside current task scope
 - Use requests library (use httpx)
 - Use any type in TypeScript
+- Render stub/placeholder buttons (if feature not ready — omit the button)
+- Hardcode theme colors (use Tailwind dark: classes)
 ```
 
 ---
