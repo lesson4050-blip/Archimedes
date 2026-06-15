@@ -11,7 +11,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 import asyncio
 
 from app.core.ws_hub import ws_hub
-from app.core.auth import verify_ws_token, decode_token
+from app.core.auth import verify_ws_token, decode_token, create_access_token
 from app.core.session import SessionManager, session_manager as singleton_session_manager
 
 router = APIRouter()
@@ -30,6 +30,19 @@ async def health_check() -> dict[str, str]:
         A dictionary with a single ``status`` key.
     """
     return {"status": "ok"}
+
+
+@router.post("/auth/token")
+async def issue_token() -> dict[str, str]:
+    """Issue an anonymous JWT for Phase 1 MVP.
+
+    Returns:
+        A dictionary with an ``access_token`` key.
+    """
+    import uuid
+    anonymous_user_id = f"anon-{uuid.uuid4()}"
+    token = create_access_token(anonymous_user_id)
+    return {"access_token": token}
 
 
 @router.websocket("/ws/{session_id}")

@@ -14,30 +14,65 @@ interface UseWebSocketReturn {
   status: WSStatus
 }
 
+async function getOrCreateToken(): Promise<string> {
+  if (typeof window === "undefined") return ""
+
+  const existing = localStorage.getItem("archimedes_token")
+  if (existing) return existing
+
+  try {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+    const res = await fetch(`${apiUrl}/auth/token`, { method: "POST" })
+    if (!res.ok) return ""
+    const data = (await res.json()) as { access_token: string }
+    localStorage.setItem("archimedes_token", data.access_token)
+    return data.access_token
+  } catch {
+    return ""
+  }
+}
+
 export function useWebSocket(sessionId: string): UseWebSocketReturn {
   const ws = useRef<WebSocket | null>(null)
   const [messages, setMessages] = useState<WSMessage[]>([])
   const [status, setStatus] = useState<WSStatus>("connecting")
 
   useEffect(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("archimedes_token") ?? "" : ""
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws"
-    const url = `${wsUrl}/${sessionId}?token=${token}`
+    let cancelled = false
 
-    ws.current = new WebSocket(url)
-    ws.current.onopen = () => setStatus("open")
-    ws.current.onclose = () => setStatus("closed")
-    ws.current.onerror = () => setStatus("error")
-    ws.current.onmessage = (e: MessageEvent) => {
-      try {
-        const msg = JSON.parse(e.data as string) as WSMessage
-        setMessages((prev) => [...prev, msg])
-      } catch (err) {
-        console.error("Failed to parse WebSocket message:", err)
+    async function connect(): Promise<void> {
+      const token = await getOrCreateToken()
+      if (cancelled) return
+
+      const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000/ws"
+      const url = `${wsUrl}/${sessionId}?token=${token}`
+
+      const socket = new WebSocket(url)
+      ws.current = socket
+
+      socket.onopen = () => {
+        if (!cancelled) setStatus("open")
+      }
+      socket.onclose = () => {
+        if (!cancelled) setStatus("closed")
+      }
+      socket.onerror = () => {
+        if (!cancelled) setStatus("error")
+      }
+      socket.onmessage = (e: MessageEvent) => {
+        try {
+          const msg = JSON.parse(e.data as string) as WSMessage
+          if (!cancelled) setMessages((prev) => [...prev, msg])
+        } catch (err) {
+          console.error("Failed to parse WebSocket message:", err)
+        }
       }
     }
 
+    void connect()
+
     return () => {
+      cancelled = true
       ws.current?.close()
     }
   }, [sessionId])
