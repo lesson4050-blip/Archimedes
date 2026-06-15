@@ -2,9 +2,27 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from typing import Any
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 from fastapi.websockets import WebSocketDisconnect
+
+
+class _FakeAdapter:
+    """A fake ModelAdapter that yields a single token without network calls."""
+
+    async def stream(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int = 2048,
+        temperature: float = 0.7,
+    ) -> AsyncIterator[str]:
+        """Yield a single test delta."""
+        yield "mocked response"
 
 
 def test_ws_rejects_missing_token(client: TestClient) -> None:
@@ -28,23 +46,26 @@ def test_ws_ping_pong(client: TestClient, valid_token: str) -> None:
 
 
 def test_ws_task_streams_and_completes(client: TestClient, valid_token: str) -> None:
-    """Sending a task through the WebSocket must stream the echo delta and complete with done."""
-    with client.websocket_connect(f"/ws/test-session?token={valid_token}") as ws:
-        ws.send_json({
-            "type": "task",
-            "session_id": "test-session",
-            "payload": {"message": "hello"},
-        })
-        events = [ws.receive_json() for _ in range(2)]
-        types = [e["type"] for e in events]
-        assert "stream" in types
-        assert "done" in types
+    """Sending a task must stream a response and complete with done."""
+    with patch("app.core.session.OllamaAdapter", return_value=_FakeAdapter()):
+        with client.websocket_connect(f"/ws/test-session?token={valid_token}") as ws:
+            ws.send_json({
+                "type": "task",
+                "session_id": "test-session",
+                "payload": {"message": "hello"},
+            })
+            events: list[dict[str, Any]] = []
+            for _ in range(2):
+                events.append(ws.receive_json())
 
-        # Validate message contents
-        stream_event = next(e for e in events if e["type"] == "stream")
-        assert stream_event["payload"]["delta"] == "Echo: hello"
-        assert stream_event["session_id"] == "test-session"
+            types = [e["type"] for e in events]
+            assert "stream" in types
+            assert "done" in types
 
-        done_event = next(e for e in events if e["type"] == "done")
-        assert "usage" in done_event["payload"]
-        assert done_event["session_id"] == "test-session"
+            stream_event = next(e for e in events if e["type"] == "stream")
+            assert stream_event["payload"]["delta"] == "mocked response"
+            assert stream_event["session_id"] == "test-session"
+
+            done_event = next(e for e in events if e["type"] == "done")
+            assert "usage" in done_event["payload"]
+            assert done_event["session_id"] == "test-session"

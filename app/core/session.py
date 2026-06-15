@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.ws_hub import ws_hub
+from app.models.ollama import OllamaAdapter
+from app.agents.base import BaseAgent
 
 
 @dataclass
@@ -100,10 +102,10 @@ class SessionManager:
         session.cancel_requested = False
 
         try:
-            # Phase 1 stub: send_stream "Echo: {message}", then send_done
             message = payload.get("message", "")
-            await ws_hub.send_stream(session_id, f"Echo: {message}")
-            await ws_hub.send_done(session_id, {"prompt_tokens": 0, "completion_tokens": 0})
+            adapter = OllamaAdapter()
+            agent = BaseAgent(adapter)
+            await agent.run(session, message, ws_hub)
         except Exception as e:
             await ws_hub.send_error(session_id, str(e))
         finally:
