@@ -38,6 +38,7 @@ export function useWebSocket(sessionId: string): UseWebSocketReturn {
   const [status, setStatus] = useState<WSStatus>("connecting")
 
   useEffect(() => {
+    setMessages([])
     let cancelled = false
 
     async function connect(): Promise<void> {

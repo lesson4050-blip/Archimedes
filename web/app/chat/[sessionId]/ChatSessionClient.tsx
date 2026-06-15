@@ -20,6 +20,7 @@ export default function ChatSessionClient(): React.JSX.Element {
   const { messages: wsEvents, send, status } = useWebSocket(sessionId)
   const [localMessages, setLocalMessages] = useState<MessageItem[]>([])
   const [streamingContent, setStreamingContent] = useState("")
+  const streamingContentRef = useRef("")
   const [inputValue, setInputValue] = useState("")
   
   const addSession = useSessionStore((state) => state.addSession)
@@ -44,6 +45,7 @@ export default function ChatSessionClient(): React.JSX.Element {
       }
     }
     setStreamingContent("")
+    streamingContentRef.current = ""
     processedEventsIndex.current = 0
     sentInitial.current = false
   }, [sessionId])
@@ -64,23 +66,25 @@ export default function ChatSessionClient(): React.JSX.Element {
       
       if (event.type === "stream") {
         const delta = (event.payload.delta as string) || ""
-        setStreamingContent((prev) => prev + delta)
+        streamingContentRef.current += delta
+        setStreamingContent(streamingContentRef.current)
       } else if (event.type === "done") {
-        setStreamingContent((currentStreaming) => {
-          if (currentStreaming) {
-            setLocalMessages((prev) => [
-              ...prev,
-              { role: "assistant", content: currentStreaming },
-            ])
-          }
-          return ""
-        })
+        const finalContent = streamingContentRef.current
+        if (finalContent) {
+          setLocalMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: finalContent },
+          ])
+        }
+        streamingContentRef.current = ""
+        setStreamingContent("")
       } else if (event.type === "error") {
         const errorMsg = (event.payload.message as string) || "Unknown error occurred"
         setLocalMessages((prev) => [
           ...prev,
           { role: "assistant", content: `Error: ${errorMsg}` },
         ])
+        streamingContentRef.current = ""
         setStreamingContent("")
       }
     }
