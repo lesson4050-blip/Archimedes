@@ -10,7 +10,7 @@ class ModelAdapter(ABC):
     """Abstract base class for streaming models."""
 
     @abstractmethod
-    def stream(
+    async def stream(
         self,
         messages: list[dict[str, str]],
         *,
@@ -27,4 +27,5 @@ class ModelAdapter(ABC):
         Returns:
             An async iterator yielding string tokens (deltas).
         """
-        ...
+        if False:
+            yield ""

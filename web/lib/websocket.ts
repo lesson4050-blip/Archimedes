@@ -8,7 +8,13 @@ export interface WSMessage {
   payload: Record<string, unknown>
 }
 
-export function useWebSocket(sessionId: string) {
+interface UseWebSocketReturn {
+  messages: WSMessage[]
+  send: (message: string) => void
+  status: WSStatus
+}
+
+export function useWebSocket(sessionId: string): UseWebSocketReturn {
   const ws = useRef<WebSocket | null>(null)
   const [messages, setMessages] = useState<WSMessage[]>([])
   const [status, setStatus] = useState<WSStatus>("connecting")
