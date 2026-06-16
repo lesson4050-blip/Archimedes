@@ -11,6 +11,7 @@ from app.agents.base import BaseAgent
 from app.core.session import Session
 from app.core.ws_hub import WSHub
 from app.models.base import ModelAdapter
+import pytest_mock
 
 
 class MockAdapter(ModelAdapter):
@@ -112,3 +113,95 @@ async def test_agent_stops_on_cancel() -> None:
     
     # Session history assistant content should only contain the first token
     assert session.history[1] == {"role": "assistant", "content": "first"}
+
+
+@pytest.mark.asyncio
+async def test_agent_does_not_persist_assistant_memory_on_exception(
+    mocker: pytest_mock.MockerFixture,
+) -> None:
+    """Verify that assistant memory is NOT persisted if an exception occurs mid-stream."""
+    class FailingAdapter(ModelAdapter):
+        async def stream(
+            self,
+            messages: list[dict[str, str]],
+            *,
+            max_tokens: int = 2048,
+            temperature: float = 0.7,
+        ) -> AsyncIterator[str]:
+            yield "first"
+            raise ValueError("Failing mid-stream")
+
+    mock_add_memory = mocker.patch("app.agents.base.add_memory", new_callable=AsyncMock)
+    adapter = FailingAdapter()
+    agent = BaseAgent(adapter)
+
+    session = Session(id="test-session", user_id="user1")
+    hub = AsyncMock(spec=WSHub)
+
+    await agent.run(session, "hello", hub)
+
+    # Verify that add_memory was not called with role="assistant"
+    for call in mock_add_memory.call_args_list:
+        args, kwargs = call
+        assert args[2] != "assistant"
+
+
+@pytest.mark.asyncio
+async def test_agent_does_not_persist_assistant_memory_on_cancel(
+    mocker: pytest_mock.MockerFixture,
+) -> None:
+    """Verify that assistant memory is NOT persisted if the session is cancelled mid-stream."""
+    class CancellingAdapter(ModelAdapter):
+        async def stream(
+            self,
+            messages: list[dict[str, str]],
+            *,
+            max_tokens: int = 2048,
+            temperature: float = 0.7,
+        ) -> AsyncIterator[str]:
+            yield "first"
+            session.cancel_requested = True
+            yield "second"
+
+    mock_add_memory = mocker.patch("app.agents.base.add_memory", new_callable=AsyncMock)
+    adapter = CancellingAdapter()
+    agent = BaseAgent(adapter)
+
+    session = Session(id="test-session", user_id="user1")
+    hub = AsyncMock(spec=WSHub)
+
+    await agent.run(session, "hello", hub)
+
+    # Verify that add_memory was not called with role="assistant"
+    for call in mock_add_memory.call_args_list:
+        args, kwargs = call
+        assert args[2] != "assistant"
+
+
+@pytest.mark.asyncio
+async def test_agent_still_persists_user_memory_even_on_failure(
+    mocker: pytest_mock.MockerFixture,
+) -> None:
+    """Verify that user memory IS persisted even if generation fails mid-stream."""
+    class FailingAdapter(ModelAdapter):
+        async def stream(
+            self,
+            messages: list[dict[str, str]],
+            *,
+            max_tokens: int = 2048,
+            temperature: float = 0.7,
+        ) -> AsyncIterator[str]:
+            yield "first"
+            raise ValueError("Failing mid-stream")
+
+    mock_add_memory = mocker.patch("app.agents.base.add_memory", new_callable=AsyncMock)
+    adapter = FailingAdapter()
+    agent = BaseAgent(adapter)
+
+    session = Session(id="test-session", user_id="user1")
+    hub = AsyncMock(spec=WSHub)
+
+    await agent.run(session, "hello", hub)
+
+    # Verify that add_memory was called for user message
+    mock_add_memory.assert_any_call("user1", "test-session", "user", "hello")

@@ -55,6 +55,7 @@ class BaseAgent:
                 "content": f"{_MEMORY_PREFIX}{context}",
             })
 
+        completed_successfully = False
         full_response = ""
         try:
             async for delta in self.adapter.stream(session.history):
@@ -66,6 +67,8 @@ class BaseAgent:
             # Record final assistant response in history
             session.history.append({"role": "assistant", "content": full_response})
             await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
+            if not session.cancel_requested:
+                completed_successfully = True
         except Exception as e:
             await hub.send_error(session.id, str(e))
         finally:
@@ -73,5 +76,6 @@ class BaseAgent:
 
         # ── Memory persistence: store both turns ────────────────────
         await add_memory(session.user_id, session.id, "user", message)
-        await add_memory(session.user_id, session.id, "assistant", full_response)
+        if completed_successfully:
+            await add_memory(session.user_id, session.id, "assistant", full_response)
 
