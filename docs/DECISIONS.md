@@ -199,3 +199,20 @@ refactor/scope-description
 
 **Reversal plan:** Remove `output: 'export'` in Phase 2 when `app/api/` proxy routes to FastAPI are added. See `TODO(phase-2)` comment in `web/next.config.js`.
 
+---
+
+## ADR-010: Anonymous JWT issuance for Phase 1
+
+**Date:** 2026-06 | **Status:** Accepted | **Must be revisited:** Phase 6 (Security)
+
+**Context:** WebSocket requires a JWT, but Phase 1 has no user registration/login system yet.
+
+**Decision:** `POST /auth/token` issues an anonymous JWT to any caller, rate-limited to 5 requests/minute/IP as a basic abuse guard.
+
+**Consequences:**
+- Anyone with network access to the backend can obtain a valid session token.
+- This is acceptable ONLY for local development (backend bound to `localhost`).
+- This MUST be replaced before any public deployment.
+
+**Reversal plan:** Phase 6 replaces this with real user accounts (registration/login) and removes anonymous token issuance entirely.
+

@@ -7,14 +7,20 @@ This module follows the architecture defined in ``docs/ARCHITECTURE.md``:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 import asyncio
+import uuid
+from collections import defaultdict
+from time import time
+
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from app.core.ws_hub import ws_hub
 from app.core.auth import verify_ws_token, decode_token, create_access_token
 from app.core.session import SessionManager, session_manager as singleton_session_manager
 
 router = APIRouter()
+
+_token_requests: dict[str, list[float]] = defaultdict(list)
 
 
 def get_session_manager() -> SessionManager:
@@ -33,13 +39,30 @@ async def health_check() -> dict[str, str]:
 
 
 @router.post("/auth/token")
-async def issue_token() -> dict[str, str]:
+async def issue_token(request: Request) -> dict[str, str]:
     """Issue an anonymous JWT for Phase 1 MVP.
+
+    Rate limited to 5 requests per minute per IP to prevent abuse.
+    This is a temporary Phase 1 measure — see docs/DECISIONS.md ADR-010.
+
+    Args:
+        request: The incoming HTTP request (used for client IP extraction).
 
     Returns:
         A dictionary with an ``access_token`` key.
+
+    Raises:
+        HTTPException: 429 if the client exceeds 5 requests per minute.
     """
-    import uuid
+    client_ip = request.client.host if request.client else "unknown"
+    now = time()
+    _token_requests[client_ip] = [
+        t for t in _token_requests[client_ip] if now - t < 60
+    ]
+    if len(_token_requests[client_ip]) >= 5:
+        raise HTTPException(status_code=429, detail="Too many token requests")
+    _token_requests[client_ip].append(now)
+
     anonymous_user_id = f"anon-{uuid.uuid4()}"
     token = create_access_token(anonymous_user_id)
     return {"access_token": token}
