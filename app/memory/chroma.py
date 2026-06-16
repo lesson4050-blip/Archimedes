@@ -24,7 +24,7 @@ from chromadb.api.models.Collection import Collection
 
 from app.core.config import get_settings
 
-_client: chromadb.ClientAPI | None = None
+_client: Any = None
 _collection: Collection | None = None
 
 
@@ -106,12 +106,18 @@ async def search_memories(
             n_results=n_results,
             where=where,
         )
-        docs: list[str] = results.get("documents", [[]])[0]
-        if exclude_session_id:
-            metas: list[dict[str, Any]] = results.get("metadatas", [[]])[0]
+        documents = results.get("documents")
+        if not documents or not documents[0]:
+            return []
+        
+        docs = [str(d) for d in documents[0]]
+        
+        metadatas = results.get("metadatas")
+        if exclude_session_id and metadatas and metadatas[0]:
+            metas = metadatas[0]
             docs = [
                 d for d, m in zip(docs, metas)
-                if m.get("session_id") != exclude_session_id
+                if m and m.get("session_id") != exclude_session_id
             ]
         return docs
 
