@@ -216,3 +216,28 @@ refactor/scope-description
 
 **Reversal plan:** Phase 6 replaces this with real user accounts (registration/login) and removes anonymous token issuance entirely.
 
+---
+
+## ADR-011: CPU-based embedding for memory (not Ollama)
+
+**Date:** 2026-06 | **Status:** Accepted
+
+**Context:** Phase 2 needs an embedding model for ChromaDB semantic search. The local LLM (qwen3:14b) already consumes ~9GB of the 12GB available VRAM on the RTX 3060.
+
+**Decision:** Use ChromaDB's built-in default embedding function (ONNX-based MiniLM-L6-v2, runs on CPU via onnxruntime) rather than an Ollama-served embedding model.
+
+**Reasons:**
+- Zero VRAM contention with qwen3:14b — embedding runs entirely on CPU
+- Avoids Ollama model-swap latency: serving two models (chat + embedding) on demand causes Ollama to load/unload models between requests, adding latency to every chat turn
+- Sufficient retrieval quality for short chat-message embeddings at our current scale
+- No additional `ollama pull` step required for setup
+
+**Consequences:**
+- Embedding quality is lower than a dedicated embedding model (e.g., nomic-embed-text, mxbai-embed-large)
+- CPU embedding is slower in absolute terms, but the volume (single chat messages, not bulk documents) makes this a non-issue in practice
+
+**Reversal plan:** If recall quality proves insufficient, revisit when a second GPU is available (see hardware upgrade path in `.env.example`) — at that point a dedicated embedding model can run without contending with the chat model.
+
+**Alternatives rejected:**
+- Ollama `nomic-embed-text`: VRAM contention with qwen3:14b, model-swap latency per turn
+- OpenAI/cloud embedding API: breaks local-first principle, adds cost and network dependency
