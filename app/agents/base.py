@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from app.memory.chroma import add_memory, search_memories
+
 if TYPE_CHECKING:
     from app.core.session import Session
     from app.core.ws_hub import WSHub
     from app.models.base import ModelAdapter
+
+_MEMORY_PREFIX = "Relevant context from past conversations:\n"
 
 
 class BaseAgent:
@@ -22,7 +26,7 @@ class BaseAgent:
         self.adapter = adapter
 
     async def run(self, session: Session, message: str, hub: WSHub) -> None:
-        """Execute the agent loop: update history, stream response, and report done/error.
+        """Execute the agent loop: recall memories, stream response, persist turns.
 
         Args:
             session: The user Session instance.
@@ -32,6 +36,24 @@ class BaseAgent:
         session.is_running = True
         session.cancel_requested = False
         session.history.append({"role": "user", "content": message})
+
+        # ── Memory recall: inject cross-session context ─────────────
+        # Remove any previously-injected memory context (prevent accumulation)
+        session.history = [
+            m for m in session.history
+            if not (
+                m.get("role") == "system"
+                and m.get("content", "").startswith(_MEMORY_PREFIX)
+            )
+        ]
+
+        memories = await search_memories(session.user_id, message, n_results=3)
+        if memories:
+            context = "\n".join(f"- {m}" for m in memories)
+            session.history.insert(0, {
+                "role": "system",
+                "content": f"{_MEMORY_PREFIX}{context}",
+            })
 
         full_response = ""
         try:
@@ -48,3 +70,8 @@ class BaseAgent:
             await hub.send_error(session.id, str(e))
         finally:
             session.is_running = False
+
+        # ── Memory persistence: store both turns ────────────────────
+        await add_memory(session.user_id, session.id, "user", message)
+        await add_memory(session.user_id, session.id, "assistant", full_response)
+
