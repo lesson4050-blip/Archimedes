@@ -25,6 +25,10 @@ def valid_token() -> str:
     return create_access_token(user_id="test-user")
 
 
+# Intentionally global (autouse=True, not scoped to memory tests only).
+# Overhead is negligible (tmp_path + one monkeypatch + two global resets)
+# and this guarantees isolation for ANY future test that touches memory
+# indirectly, without needing per-directory conftest upkeep.
 @pytest.fixture(autouse=True)
 def _isolate_chroma(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Reset ChromaDB singletons and redirect storage to a temp dir per test.

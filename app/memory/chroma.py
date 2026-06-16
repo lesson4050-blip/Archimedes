@@ -24,6 +24,10 @@ from chromadb.api.models.Collection import Collection
 
 from app.core.config import get_settings
 
+# chromadb does not export a stable public type for PersistentClient's
+# return value across versions — Any is used deliberately here, not as
+# a shortcut. Do not replace with a guessed type without verifying it
+# against the installed chromadb version.
 _client: Any = None
 _collection: Collection | None = None
 
@@ -109,9 +113,9 @@ async def search_memories(
         documents = results.get("documents")
         if not documents or not documents[0]:
             return []
-        
+
         docs = [str(d) for d in documents[0]]
-        
+
         metadatas = results.get("metadatas")
         if exclude_session_id and metadatas and metadatas[0]:
             metas = metadatas[0]
