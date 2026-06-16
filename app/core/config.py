@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     local_model: str = "qwen3:14b"
 
+    # ── Memory ──────────────────────────────────────────────
+    chroma_path: str = "./data/chroma_db"
+
     # ── Security ────────────────────────────────────────────
     allowed_origins: str = "http://localhost:3000,http://localhost:1420"
     jwt_secret_key: str = "change-this-to-a-long-random-string-in-production"
