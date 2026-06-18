@@ -126,3 +126,63 @@ async def search_memories(
         return docs
 
     return await asyncio.to_thread(_search)
+
+
+async def list_memories(user_id: str, limit: int = 200) -> list[dict[str, str]]:
+    """List a user's memories, most recent first.
+
+    Uses collection.get() (not .query()) since this is a filter-based
+    listing, not a semantic search.
+    Returns dicts with keys: id, content, role, session_id, timestamp.
+    Sort by timestamp descending before returning (ISO 8601 strings
+    sort correctly as chronological order).
+    """
+    def _list() -> list[dict[str, str]]:
+        collection = _get_collection()
+        res = collection.get(where={"user_id": user_id}, limit=limit)
+        ids = res.get("ids") or []
+        documents = res.get("documents") or []
+        metadatas = res.get("metadatas") or []
+
+        entries = []
+        for i in range(len(ids)):
+            meta = metadatas[i] if i < len(metadatas) and metadatas[i] else {}
+            entries.append({
+                "id": ids[i],
+                "content": documents[i] if i < len(documents) else "",
+                "role": str(meta.get("role", "")),
+                "session_id": str(meta.get("session_id", "")),
+                "timestamp": str(meta.get("timestamp", "")),
+            })
+        entries.sort(key=lambda x: x["timestamp"], reverse=True)
+        return entries
+
+    return await asyncio.to_thread(_list)
+
+
+async def delete_memory(user_id: str, memory_id: str) -> bool:
+    """Delete a memory entry, but ONLY if it belongs to user_id.
+
+    CRITICAL SECURITY STEP — do not skip:
+    1. First call collection.get(ids=[memory_id]) to fetch the entry's metadata.
+    2. If no entry found, OR metadata["user_id"] != user_id: return False
+       WITHOUT calling delete. Do not rely on combining ids+where in a
+       single delete() call — explicit ownership check first, always.
+    3. Only if ownership is confirmed: call collection.delete(ids=[memory_id])
+       and return True.
+    """
+    def _delete() -> bool:
+        collection = _get_collection()
+        res = collection.get(ids=[memory_id])
+        if not res.get("ids"):
+            return False
+        metadatas = res.get("metadatas")
+        if not metadatas or not metadatas[0]:
+            return False
+        meta = metadatas[0]
+        if not meta or meta.get("user_id") != user_id:
+            return False
+        collection.delete(ids=[memory_id])
+        return True
+
+    return await asyncio.to_thread(_delete)

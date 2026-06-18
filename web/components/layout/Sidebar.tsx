@@ -5,7 +5,8 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useSessionStore } from "@/lib/store"
 import ThemeToggle from "@/components/ui/ThemeToggle"
-import { MessageSquare, Plus } from "lucide-react"
+import { MessageSquare, Plus, Brain } from "lucide-react"
+
 
 export default function Sidebar(): React.JSX.Element {
   const router = useRouter()
@@ -75,9 +76,19 @@ export default function Sidebar(): React.JSX.Element {
         )}
       </div>
 
-      {/* Bottom Area (Empty/No Stubs) */}
+      {/* Bottom Area (Memory Link) */}
       <div className="p-4 border-t border-gray-200 dark:border-slate-800">
-        {/* Intentionally left blank to avoid stub buttons */}
+        <Link
+          href="/memory"
+          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors duration-150 ${
+            pathname === "/memory"
+              ? "bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-medium"
+              : "text-slate-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200"
+          }`}
+        >
+          <Brain className="h-5 w-5 flex-shrink-0" />
+          <span>Memory</span>
+        </Link>
       </div>
     </aside>
   )

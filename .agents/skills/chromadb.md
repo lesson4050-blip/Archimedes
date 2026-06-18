@@ -229,6 +229,31 @@ async def test_no_cross_user_leakage(temp_chroma_path, monkeypatch):
 
 ---
 
+## Verify Ownership Before Delete Pattern
+
+When deleting an entry by ID, do not rely solely on `collection.delete(ids=[memory_id])`. Explicitly check ownership first by retrieving the entry with `collection.get` and validating its `user_id` metadata.
+
+```python
+async def delete_memory(user_id: str, memory_id: str) -> bool:
+    def _delete() -> bool:
+        collection = _get_collection()
+        res = collection.get(ids=[memory_id])
+        if not res.get("ids"):
+            return False
+        metadatas = res.get("metadatas")
+        if not metadatas or not metadatas[0]:
+            return False
+        meta = metadatas[0]
+        if not meta or meta.get("user_id") != user_id:
+            return False
+        collection.delete(ids=[memory_id])
+        return True
+
+    return await asyncio.to_thread(_delete)
+```
+
+---
+
 ## Common Pitfalls
 
 - **Forgetting `asyncio.to_thread`** → blocks event loop for all sessions, not just one.

@@ -14,9 +14,13 @@ from time import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
+from pydantic import BaseModel
+
 from app.core.ws_hub import ws_hub
-from app.core.auth import verify_ws_token, decode_token, create_access_token
+from app.core.auth import verify_ws_token, decode_token, create_access_token, get_current_user_id
 from app.core.session import SessionManager, session_manager as singleton_session_manager
+from app.memory.chroma import list_memories, delete_memory
+
 
 router = APIRouter()
 
@@ -108,3 +112,35 @@ async def websocket_endpoint(
         pass
     finally:
         await ws_hub.disconnect(session_id, websocket)
+
+
+class MemoryEntry(BaseModel):
+    id: str
+    content: str
+    role: str
+    session_id: str
+    timestamp: str
+
+
+class MemoryListResponse(BaseModel):
+    memories: list[MemoryEntry]
+
+
+@router.get("/memory", response_model=MemoryListResponse)
+async def get_memories(user_id: str = Depends(get_current_user_id)) -> MemoryListResponse:
+    entries = await list_memories(user_id)
+    return MemoryListResponse(memories=[MemoryEntry(**e) for e in entries])
+
+
+@router.delete("/memory/{memory_id}")
+async def remove_memory(
+    memory_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> dict[str, bool]:
+    deleted = await delete_memory(user_id, memory_id)
+    if not deleted:
+        # 404, not 403 — do not confirm to an unauthorized caller
+        # that a memory with this ID exists at all.
+        raise HTTPException(status_code=404, detail="Memory not found")
+    return {"deleted": True}
+
