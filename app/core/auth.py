@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError  # type: ignore[import-untyped]
 
 from app.core.config import get_settings
+from fastapi import Header, HTTPException
+
 
 
 def verify_ws_token(token: str | None) -> bool:
@@ -82,3 +84,22 @@ def verify_api_key(key: str | None) -> bool:
         return False
     settings = get_settings()
     return secrets.compare_digest(key, settings.admin_api_key)
+
+
+async def get_current_user_id(authorization: str | None = Header(None)) -> str:
+    """Extract and validate user_id from 'Authorization: Bearer <jwt>' header.
+
+    Raises:
+        HTTPException 401 if header is missing, malformed, or token is invalid.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = authorization.removeprefix("Bearer ")
+    payload = decode_token(token)
+    if payload is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return str(user_id)
+
