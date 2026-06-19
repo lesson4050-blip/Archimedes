@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 
@@ -14,7 +15,7 @@ class _ScriptedAdapter(ModelAdapter):
 
     def __init__(self, responses: list[str]) -> None:
         self.responses = list(responses)
-        self.calls: list[dict[str, any]] = []
+        self.calls: list[dict[str, Any]] = []
 
     async def stream(
         self,

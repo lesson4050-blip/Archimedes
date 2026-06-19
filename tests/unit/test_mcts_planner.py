@@ -31,12 +31,9 @@ class _ScriptedAdapter(ModelAdapter):
         if self.responses:
             response = self.responses.pop(0)
         else:
-            # Detect expand vs simulate prompts
-            is_expand = any(
-                "propose" in m.get("content", "").lower()
-                or "planning" in m.get("content", "").lower()
-                for m in messages
-            )
+            # _expand and _simulate use different max_tokens (500 vs 10) in mcts.py —
+            # this is a more reliable discriminator than checking system prompt substrings.
+            is_expand = max_tokens == 500
             if is_expand:
                 response = "STEP: Default step | TERMINAL: NO"
             else:
@@ -110,7 +107,7 @@ def test_backpropagate_updates_all_ancestors_not_just_leaf() -> None:
 
 @pytest.mark.anyio
 async def test_search_returns_nonempty_plan_with_terminal_node_scripted() -> None:
-    # Propose two steps, step 2 is terminal.
+    # Suggest two steps, step 2 is terminal.
     # We pre-script the first expand response.
     # We pre-script the simulate responses as 0.9.
     expand_response = "STEP: Task step 1 | TERMINAL: NO\nSTEP: Task step 2 | TERMINAL: YES"
