@@ -33,6 +33,7 @@ Self-hosted, multi-surface autonomous AI agent platform. Run AI agents that plan
 | Component | File | Responsibility |
 |-----------|------|----------------|
 | Base Agent | app/agents/base.py | Abstract agent interface |
+| Task Classifier | app/agents/classifier.py | Task complexity classification (SIMPLE/COMPLEX) via cheap LLM call |
 | MCTS Planner | app/agents/mcts.py | UCB1 tree search, task decomposition |
 | MoA | app/agents/moa.py | Multi-model ensemble + CoT aggregation |
 | HydraSwarm | app/agents/hydra.py | Parallel agent pool |
