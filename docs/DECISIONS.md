@@ -241,3 +241,24 @@ refactor/scope-description
 **Alternatives rejected:**
 - Ollama `nomic-embed-text`: VRAM contention with qwen3:14b, model-swap latency per turn
 - OpenAI/cloud embedding API: breaks local-first principle, adds cost and network dependency
+
+---
+
+## ADR-012: Disable Ollama thinking mode across all call sites
+
+**Date:** 2026-06 | **Status:** Accepted | **Should be revisited:** if/when a "show reasoning" UI feature is deliberately built
+
+**Context:**
+qwen3:14b defaults to thinking mode when the `think` field is omitted from Ollama API requests. Reasoning tokens and content tokens share the same `num_predict` budget. Direct testing against our Ollama 0.30.10 + qwen3:14b confirmed: with `max_tokens=10` (classifier, MCTS `_simulate`), 100% of budget was consumed by thinking, leaving `message.content` completely empty every time. With `max_tokens=2048` (main chat), ~88% of budget went to thinking in a representative test, truncating the visible response mid-sentence (`done_reason: "length"`).
+
+**Decision:**
+Explicitly set `think=false` (top-level field, not nested in options) on every `adapter.stream()` call site in the codebase.
+
+**Consequences:**
+- Faster responses across the board (eliminates the 7-8x latency inflation observed).
+- No more silent mid-sentence truncation.
+- The model's reasoning process is not used at all — answer quality for genuinely complex questions may be lower than a properly-surfaced thinking-mode implementation could provide.
+
+**Reversal plan:**
+If reasoning quality becomes a priority, build a dedicated "show reasoning" feature — separate WS event type for `message.thinking`, collapsed-by-default UI panel, and a content-specific token budget (e.g., reserve `num_predict` headroom for content specifically, or query thinking and content as genuinely separate generation passes) rather than re-enabling thinking blindly into the existing shared-budget setup.
+
