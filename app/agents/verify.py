@@ -34,7 +34,9 @@ async def verify_plan_result(
             {"role": "user", "content": f"Task: {task}\n\nResult: {result}"},
         ]
         chunks: list[str] = []
-        async for delta in adapter.stream(messages, max_tokens=100, temperature=0.0):
+        async for delta in adapter.stream(
+            messages, max_tokens=100, temperature=0.0, think=False
+        ):
             chunks.append(delta)
         raw = "".join(chunks).strip()
         lines = raw.split("\n", 1)

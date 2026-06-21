@@ -54,6 +54,7 @@ class _FakeClient:
 
     def __init__(self, response: _FakeStreamResponse) -> None:
         self._response = response
+        self.stream_calls: list[dict[str, Any]] = []
 
     async def __aenter__(self) -> "_FakeClient":
         return self
@@ -63,6 +64,10 @@ class _FakeClient:
 
     def stream(self, *args: Any, **kwargs: Any) -> _FakeStreamCtx:
         """Return a fake stream context manager."""
+        self.stream_calls.append({
+            "args": args,
+            "kwargs": kwargs,
+        })
         return _FakeStreamCtx(self._response)
 
 
@@ -80,9 +85,29 @@ async def test_ollama_adapter_streams_deltas() -> None:
 
     with patch("httpx.AsyncClient", return_value=fake_client):
         adapter = OllamaAdapter()
-        deltas = [d async for d in adapter.stream([{"role": "user", "content": "hi"}])]
+        deltas = [d async for d in adapter.stream([{"role": "user", "content": "hi"}], think=False)]
 
     assert deltas == ["Hello", " world"]
+    assert len(fake_client.stream_calls) == 1
+    payload = fake_client.stream_calls[0]["kwargs"]["json"]
+    assert payload["think"] is False
+
+
+@pytest.mark.asyncio
+async def test_ollama_adapter_sends_think_true() -> None:
+    """Verify that the adapter passes think=True to the payload when requested."""
+    lines = ['{"message": {"role": "assistant", "content": "Hello"}, "done": true}']
+    fake_response = _FakeStreamResponse(lines)
+    fake_client = _FakeClient(fake_response)
+
+    with patch("httpx.AsyncClient", return_value=fake_client):
+        adapter = OllamaAdapter()
+        async for _ in adapter.stream([{"role": "user", "content": "hi"}], think=True):
+            pass
+
+    assert len(fake_client.stream_calls) == 1
+    payload = fake_client.stream_calls[0]["kwargs"]["json"]
+    assert payload["think"] is True
 
 
 @pytest.mark.asyncio

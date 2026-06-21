@@ -20,6 +20,7 @@ class _FakeAdapter:
         *,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        think: bool = False,
     ) -> AsyncIterator[str]:
         """Yield a single test delta."""
         yield "mocked response"

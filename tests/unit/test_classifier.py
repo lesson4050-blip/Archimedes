@@ -23,11 +23,13 @@ class _ScriptedAdapter(ModelAdapter):
         *,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        think: bool = False,
     ) -> AsyncIterator[str]:
         self.calls.append({
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "think": think,
         })
         response = self.responses.pop(0) if self.responses else ""
         yield response
@@ -42,6 +44,7 @@ class _RaisingAdapter(ModelAdapter):
         *,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        think: bool = False,
     ) -> AsyncIterator[str]:
         raise RuntimeError("Ollama connection failed")
         yield ""  # pragma: no cover
@@ -82,3 +85,4 @@ async def test_classify_task_uses_low_max_tokens() -> None:
     assert len(adapter.calls) == 1
     assert adapter.calls[0]["max_tokens"] == 10
     assert adapter.calls[0]["temperature"] == 0.0
+    assert adapter.calls[0]["think"] is False

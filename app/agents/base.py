@@ -58,7 +58,9 @@ class BaseAgent:
         completed_successfully = False
         full_response = ""
         try:
-            async for delta in self.adapter.stream(session.history):
+            # Explicitly disable thinking mode (ADR-012) to avoid latency inflation
+            # and token starvation/truncation, since reasoning is not surfaced in UI.
+            async for delta in self.adapter.stream(session.history, think=False):
                 if session.cancel_requested:
                     break
                 full_response += delta

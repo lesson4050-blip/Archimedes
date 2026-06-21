@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -19,6 +20,7 @@ class MockAdapter(ModelAdapter):
 
     def __init__(self, deltas: list[str]) -> None:
         self.deltas = deltas
+        self.calls: list[dict[str, Any]] = []
 
     async def stream(
         self,
@@ -26,7 +28,14 @@ class MockAdapter(ModelAdapter):
         *,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        think: bool = False,
     ) -> AsyncIterator[str]:
+        self.calls.append({
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "think": think,
+        })
         for delta in self.deltas:
             yield delta
 
@@ -93,6 +102,7 @@ async def test_agent_stops_on_cancel() -> None:
             *,
             max_tokens: int = 2048,
             temperature: float = 0.7,
+            think: bool = False,
         ) -> AsyncIterator[str]:
             yield "first"
             # Set cancellation flag
@@ -127,6 +137,7 @@ async def test_agent_does_not_persist_assistant_memory_on_exception(
             *,
             max_tokens: int = 2048,
             temperature: float = 0.7,
+            think: bool = False,
         ) -> AsyncIterator[str]:
             yield "first"
             raise ValueError("Failing mid-stream")
@@ -158,6 +169,7 @@ async def test_agent_does_not_persist_assistant_memory_on_cancel(
             *,
             max_tokens: int = 2048,
             temperature: float = 0.7,
+            think: bool = False,
         ) -> AsyncIterator[str]:
             yield "first"
             session.cancel_requested = True
@@ -190,6 +202,7 @@ async def test_agent_still_persists_user_memory_even_on_failure(
             *,
             max_tokens: int = 2048,
             temperature: float = 0.7,
+            think: bool = False,
         ) -> AsyncIterator[str]:
             yield "first"
             raise ValueError("Failing mid-stream")
@@ -205,3 +218,18 @@ async def test_agent_still_persists_user_memory_even_on_failure(
 
     # Verify that add_memory was called for user message
     mock_add_memory.assert_any_call("user1", "test-session", "user", "hello")
+
+
+@pytest.mark.asyncio
+async def test_agent_passes_think_false_to_adapter() -> None:
+    """Verify that the agent explicitly passes think=False to the adapter stream call."""
+    adapter = MockAdapter(["Hello"])
+    agent = BaseAgent(adapter)
+    session = Session(id="test-session", user_id="user1")
+    hub = AsyncMock(spec=WSHub)
+
+    await agent.run(session, "hello", hub)
+
+    assert len(adapter.calls) == 1
+    assert adapter.calls[0]["think"] is False
+

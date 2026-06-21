@@ -154,7 +154,9 @@ class MCTSPlanner:
 
         try:
             chunks: list[str] = []
-            async for delta in self.adapter.stream(messages, max_tokens=500, temperature=0.7):
+            async for delta in self.adapter.stream(
+                messages, max_tokens=500, temperature=0.7, think=False
+            ):
                 chunks.append(delta)
             raw = "".join(chunks).strip()
         except Exception:
@@ -207,7 +209,9 @@ class MCTSPlanner:
 
         try:
             chunks: list[str] = []
-            async for delta in self.adapter.stream(messages, max_tokens=10, temperature=0.0):
+            async for delta in self.adapter.stream(
+                messages, max_tokens=10, temperature=0.0, think=False
+            ):
                 chunks.append(delta)
             raw = "".join(chunks).strip()
 

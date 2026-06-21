@@ -20,6 +20,7 @@ class OllamaAdapter(ModelAdapter):
         *,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        think: bool = False,
     ) -> AsyncIterator[str]:
         """Yield text deltas as they stream from Ollama's chat endpoint.
 
@@ -27,6 +28,7 @@ class OllamaAdapter(ModelAdapter):
             messages: List of message dictionaries representing conversation history.
             max_tokens: The maximum number of tokens to generate.
             temperature: Sampling temperature for generation.
+            think: Whether to enable reasoning/thinking mode (e.g. for thinking models).
 
         Returns:
             An async iterator yielding string tokens (deltas).
@@ -40,11 +42,13 @@ class OllamaAdapter(ModelAdapter):
             "model": settings.local_model,
             "messages": messages,
             "stream": True,
+            "think": think,  # TOP-LEVEL — NOT nested inside "options" (Ollama issue #14793 confirms nested is ignored for some model/endpoint combos)
             "options": {
                 "temperature": temperature,
                 "num_predict": max_tokens,
             },
         }
+
 
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
