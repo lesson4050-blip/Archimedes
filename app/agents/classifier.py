@@ -35,7 +35,9 @@ async def classify_task(adapter: ModelAdapter, message: str) -> TaskComplexity:
             {"role": "user", "content": message},
         ]
         chunks: list[str] = []
-        async for delta in adapter.stream(messages, max_tokens=10, temperature=0.0):
+        async for delta in adapter.stream(
+            messages, max_tokens=10, temperature=0.0, think=False
+        ):
             chunks.append(delta)
         raw = "".join(chunks).strip().upper()
         if "COMPLEX" in raw:
