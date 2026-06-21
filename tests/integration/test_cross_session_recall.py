@@ -37,7 +37,9 @@ class EchoAdapter(ModelAdapter):
         *,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        think: bool = False,
     ) -> AsyncIterator[str]:
+        self.last_think = think
         yield self._response
 
 

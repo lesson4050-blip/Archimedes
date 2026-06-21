@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 
@@ -19,6 +20,7 @@ class _ScriptedAdapter(ModelAdapter):
     def __init__(self, responses: list[str]) -> None:
         self.responses = list(responses)
         self.call_count = 0
+        self.calls: list[dict[str, Any]] = []
 
     async def stream(
         self,
@@ -26,8 +28,15 @@ class _ScriptedAdapter(ModelAdapter):
         *,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        think: bool = False,
     ) -> AsyncIterator[str]:
         self.call_count += 1
+        self.calls.append({
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "think": think,
+        })
         if self.responses:
             response = self.responses.pop(0)
         else:
@@ -121,3 +130,18 @@ async def test_search_returns_nonempty_plan_with_terminal_node_scripted() -> Non
     
     assert len(plan) > 0
     assert "Task step" in plan[0]
+
+
+@pytest.mark.anyio
+async def test_mcts_passes_think_false_to_all_stream_calls() -> None:
+    """Verify that both _expand and _simulate stream calls pass think=False."""
+    # We do 1 iteration of search, which will trigger 1 _expand and 1 _simulate call.
+    adapter = _ScriptedAdapter([])
+    planner = MCTSPlanner(adapter, max_iterations=1)
+    await planner.search("test task")
+
+    assert len(adapter.calls) >= 2
+    # Check that both calls had think=False passed
+    for call in adapter.calls:
+        assert call["think"] is False
+

@@ -23,11 +23,13 @@ class _ScriptedAdapter(ModelAdapter):
         *,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        think: bool = False,
     ) -> AsyncIterator[str]:
         self.calls.append({
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "think": think,
         })
         response = self.responses.pop(0) if self.responses else ""
         yield response
@@ -42,6 +44,7 @@ class _RaisingAdapter(ModelAdapter):
         *,
         max_tokens: int = 2048,
         temperature: float = 0.7,
+        think: bool = False,
     ) -> AsyncIterator[str]:
         raise RuntimeError("Ollama connection failed")
         yield ""  # pragma: no cover
@@ -77,3 +80,14 @@ async def test_verify_extracts_reason_from_second_line() -> None:
     result = await verify_plan_result(adapter, "target task", "some result")
     assert result.passed is True
     assert result.reason == "Reason is on line 2\nAdditional info on line 3"
+
+
+@pytest.mark.anyio
+async def test_verify_passes_think_false() -> None:
+    """Verify that verify_plan_result explicitly passes think=False to adapter stream."""
+    adapter = _ScriptedAdapter(["YES\nPlan solved the task successfully."])
+    await verify_plan_result(adapter, "target task", "some result")
+
+    assert len(adapter.calls) == 1
+    assert adapter.calls[0]["think"] is False
+
