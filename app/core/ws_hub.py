@@ -82,6 +82,22 @@ class WSHub:
             },
         )
 
+    async def send_planning(self, session_id: str, status: str) -> None:
+        """Broadcast a planning event with the status.
+
+        Args:
+            session_id: The ID of the session.
+            status: The planning status string.
+        """
+        await self.broadcast(
+            session_id,
+            {
+                "type": "planning",
+                "session_id": session_id,
+                "payload": {"status": status},
+            },
+        )
+
     async def send_done(self, session_id: str, usage: dict[str, int]) -> None:
         """Broadcast a done event with usage stats.
 
