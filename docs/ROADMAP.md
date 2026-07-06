@@ -56,13 +56,13 @@
 
 **Goal:** Agent decomposes complex tasks and plans before executing.
 
-- [ ] MCTS with UCB1 implementation
-- [ ] Task decomposition prompt template
-- [ ] Step-by-step execution with rollback on failure
-- [ ] Self-Verification Engine (output validation)
-- [ ] Retry logic on failed steps (max 3 retries)
-- [ ] Plan visualization in UI
-- [ ] MCTS unit + integration tests
+- [x] MCTS with UCB1 implementation
+- [x] Task decomposition prompt template
+- [x] Step-by-step execution with rollback on failure
+- [x] Self-Verification Engine (output validation)
+- [x] Retry logic on failed steps (max 3 retries)
+- [x] Plan visualization in UI
+- [x] MCTS unit + integration tests
 
 **Done criteria:** "Build a REST API with auth" → agent produces verified working result in planned steps.
 
