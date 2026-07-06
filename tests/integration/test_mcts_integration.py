@@ -30,11 +30,14 @@ def test_simple_message_bypasses_mcts(
 
     mock_agent_instance = mock_base_agent_class.return_value
 
-    async def fake_run(session: Any, message: str, hub: Any) -> None:
+    async def fake_run(
+        session: Any, message: str, hub: Any, send_done: bool = True
+    ) -> None:
         session.history.append({"role": "user", "content": message})
         await hub.send_stream(session.id, "direct response")
         session.history.append({"role": "assistant", "content": "direct response"})
-        await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
+        if send_done:
+            await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
 
     mock_agent_instance.run = AsyncMock(side_effect=fake_run)
 
@@ -84,11 +87,14 @@ def test_complex_message_triggers_mcts_path(
 
     mock_agent_instance = mock_base_agent_class.return_value
 
-    async def fake_run(session: Any, message: str, hub: Any) -> None:
+    async def fake_run(
+        session: Any, message: str, hub: Any, send_done: bool = True
+    ) -> None:
         session.history.append({"role": "user", "content": message})
         await hub.send_stream(session.id, "agent response")
         session.history.append({"role": "assistant", "content": "agent response"})
-        await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
+        if send_done:
+            await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
 
     mock_agent_instance.run = AsyncMock(side_effect=fake_run)
 
@@ -152,13 +158,16 @@ def test_complex_message_with_empty_plan_falls_back_to_direct(
 
     mock_agent_instance = mock_base_agent_class.return_value
 
-    async def fake_run(session: Any, message: str, hub: Any) -> None:
+    async def fake_run(
+        session: Any, message: str, hub: Any, send_done: bool = True
+    ) -> None:
         session.history.append({"role": "user", "content": message})
         await hub.send_stream(session.id, "direct fallback response")
         session.history.append(
             {"role": "assistant", "content": "direct fallback response"}
         )
-        await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
+        if send_done:
+            await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
 
     mock_agent_instance.run = AsyncMock(side_effect=fake_run)
 
@@ -212,7 +221,7 @@ def test_complex_message_with_failed_verification_shows_warning(
     client: TestClient,
     valid_token: str,
 ) -> None:
-    """If verification fails, a warning message must be appended to the stream."""
+    """If verification fails, a warning message must be appended to the stream before done."""
     mock_classify.return_value = TaskComplexity.COMPLEX
 
     mock_planner_instance = mock_mcts_class.return_value
@@ -222,11 +231,14 @@ def test_complex_message_with_failed_verification_shows_warning(
 
     mock_agent_instance = mock_base_agent_class.return_value
 
-    async def fake_run(session: Any, message: str, hub: Any) -> None:
+    async def fake_run(
+        session: Any, message: str, hub: Any, send_done: bool = True
+    ) -> None:
         session.history.append({"role": "user", "content": message})
         await hub.send_stream(session.id, "bad response")
         session.history.append({"role": "assistant", "content": "bad response"})
-        await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
+        if send_done:
+            await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
 
     mock_agent_instance.run = AsyncMock(side_effect=fake_run)
 
@@ -242,8 +254,8 @@ def test_complex_message_with_failed_verification_shows_warning(
         # 2. "Complex task detected" stream
         # 3. "Plan:" stream
         # 4. "bad response" stream
-        # 5. done
-        # 6. "Verification note: Incomplete" stream
+        # 5. "Verification note: Incomplete" stream
+        # 6. done
         events = [ws.receive_json() for _ in range(6)]
 
         types = [e["type"] for e in events]
@@ -251,12 +263,14 @@ def test_complex_message_with_failed_verification_shows_warning(
         assert "stream" in types
         assert "done" in types
 
-        stream_deltas = [
-            e["payload"]["delta"] for e in events if e["type"] == "stream"
-        ]
-        full_stream = "".join(stream_deltas)
+        # Find the index of the done event and verification note event
+        done_idx = next(i for i, e in enumerate(events) if e["type"] == "done")
+        warn_idx = next(
+            i for i, e in enumerate(events)
+            if e["type"] == "stream" and "Verification note: Incomplete" in e["payload"]["delta"]
+        )
 
-        assert "Verification note: Incomplete" in full_stream
+        assert warn_idx < done_idx
 
     mock_classify.assert_called_once()
     mock_mcts_class.assert_called_once()

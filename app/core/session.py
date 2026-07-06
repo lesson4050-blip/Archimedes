@@ -105,10 +105,9 @@ class SessionManager:
         session.is_running = True
         session.cancel_requested = False
 
-        adapter = OllamaAdapter()
-        agent = BaseAgent(adapter)
-
         try:
+            adapter = OllamaAdapter()
+            agent = BaseAgent(adapter)
             message = payload.get("message", "")
 
             # Step 1: classify
@@ -152,7 +151,7 @@ class SessionManager:
                         f"{plan_text}\n\n"
                         f"User's original request: {message}"
                     )
-                    await agent.run(session, plan_context, ws_hub)
+                    await agent.run(session, plan_context, ws_hub, send_done=False)
 
                     # Step 6: verify the result (last assistant message in history)
                     if session.history:
@@ -169,6 +168,9 @@ class SessionManager:
                                 session_id,
                                 f"\n⚠️ *Verification note: {verification.reason}*\n"
                             )
+
+                    # Send done event after verification warning (Fix 2)
+                    await ws_hub.send_done(session_id, {"prompt_tokens": 0, "completion_tokens": 0})
 
         except Exception as e:
             await ws_hub.send_error(session_id, str(e))

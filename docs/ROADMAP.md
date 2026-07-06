@@ -60,7 +60,7 @@
 - [x] Task decomposition prompt template
 - [x] Step-by-step execution with rollback on failure
 - [x] Self-Verification Engine (output validation)
-- [x] Retry logic on failed steps (max 3 retries)
+- [x] Self-verification with warning on failure (retry deferred to Phase 6)
 - [x] Plan visualization in UI
 - [x] MCTS unit + integration tests
 
