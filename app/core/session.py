@@ -151,26 +151,36 @@ class SessionManager:
                         f"{plan_text}\n\n"
                         f"User's original request: {message}"
                     )
+                    # TODO(phase-4): plan_context is stored in session.history and
+                    # ChromaDB memory as if it were a real user message, polluting
+                    # future recall with "Execute this plan step by step..." strings.
+                    # Fix: pass original `message` for memory storage, plan_context
+                    # only for the LLM call (requires separating memory_message from
+                    # llm_message in BaseAgent.run signature).
                     await agent.run(session, plan_context, ws_hub, send_done=False)
 
                     # Step 6: verify the result (last assistant message in history)
-                    if session.history:
-                        last_response = next(
-                            (m["content"] for m in reversed(session.history)
-                             if m["role"] == "assistant"),
-                            ""
-                        )
-                        verification = await verify_plan_result(
-                            adapter, message, last_response
-                        )
-                        if not verification.passed:
-                            await ws_hub.send_stream(
-                                session_id,
-                                f"\n⚠️ *Verification note: {verification.reason}*\n"
+                    try:
+                        if session.history:
+                            last_response = next(
+                                (m["content"] for m in reversed(session.history)
+                                 if m["role"] == "assistant"),
+                                ""
                             )
-
-                    # Send done event after verification warning (Fix 2)
-                    await ws_hub.send_done(session_id, {"prompt_tokens": 0, "completion_tokens": 0})
+                            verification = await verify_plan_result(
+                                adapter, message, last_response
+                            )
+                            if not verification.passed:
+                                await ws_hub.send_stream(
+                                    session_id,
+                                    f"\n⚠️ *Verification note: {verification.reason}*\n"
+                                )
+                    except Exception:
+                        pass  # verification is best-effort, never block done event
+                    finally:
+                        await ws_hub.send_done(
+                            session_id, {"prompt_tokens": 0, "completion_tokens": 0}
+                        )
 
         except Exception as e:
             await ws_hub.send_error(session_id, str(e))
