@@ -25,13 +25,20 @@ class BaseAgent:
         """
         self.adapter = adapter
 
-    async def run(self, session: Session, message: str, hub: WSHub) -> None:
+    async def run(
+        self,
+        session: Session,
+        message: str,
+        hub: WSHub,
+        send_done: bool = True,
+    ) -> None:
         """Execute the agent loop: recall memories, stream response, persist turns.
 
         Args:
             session: The user Session instance.
             message: The user's inbound text message.
             hub: The WebSocket connection hub for broadcasting.
+            send_done: Whether to broadcast the done event when finished.
         """
         session.is_running = True
         session.cancel_requested = False
@@ -68,7 +75,8 @@ class BaseAgent:
 
             # Record final assistant response in history
             session.history.append({"role": "assistant", "content": full_response})
-            await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
+            if send_done:
+                await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
             if not session.cancel_requested:
                 completed_successfully = True
         except Exception as e:

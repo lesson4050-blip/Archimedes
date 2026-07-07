@@ -81,12 +81,9 @@ User input (any surface)
   -> WebSocket / HTTP endpoint
   -> Auth middleware (JWT/API key)
   -> Session Manager (create/restore)
-  -> Cascading Router (select model + agent type)
-  -> Agent Engine
-      MCTS: decompose task into steps
-      Per step: select tool -> execute -> verify
-      If parallel: spawn HydraSwarm workers
-      Self-Verification: validate output
+  -> classify_task()
+      -> SIMPLE: BaseAgent (direct stream)
+      -> COMPLEX: MCTSPlanner -> verify -> BaseAgent (plan-injected stream)
   -> Memory: persist result, update ChromaDB
   -> Audit Trail: log all actions
   -> Stream response via WebSocket

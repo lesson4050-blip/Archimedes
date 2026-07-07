@@ -9,6 +9,9 @@ from typing import Any
 from app.core.ws_hub import ws_hub
 from app.models.ollama import OllamaAdapter
 from app.agents.base import BaseAgent
+from app.agents.classifier import classify_task, TaskComplexity
+from app.agents.mcts import MCTSPlanner
+from app.agents.verify import verify_plan_result
 
 
 @dataclass
@@ -88,7 +91,8 @@ class SessionManager:
     async def handle_task(self, session_id: str, payload: dict[str, Any]) -> None:
         """Process an incoming task message.
 
-        Executes the stub agent logic, streaming back the response.
+        Executes the agent logic: classifies task complexity, then either runs direct
+        or routes through MCTS planning followed by verification.
 
         Args:
             session_id: The ID of the session.
@@ -102,10 +106,82 @@ class SessionManager:
         session.cancel_requested = False
 
         try:
-            message = payload.get("message", "")
             adapter = OllamaAdapter()
             agent = BaseAgent(adapter)
-            await agent.run(session, message, ws_hub)
+            message = payload.get("message", "")
+
+            # Step 1: classify
+            complexity = await classify_task(adapter, message)
+
+            if complexity == TaskComplexity.SIMPLE:
+                # Fast path — unchanged from Phase 2
+                await agent.run(session, message, ws_hub)
+
+            else:
+                # MCTS path
+                # Step 2: notify user that planning is in progress
+                await ws_hub.send_planning(session_id, "planning")
+                await ws_hub.send_stream(
+                    session_id,
+                    "\n🔍 *Complex task detected — planning steps...*\n\n"
+                )
+
+                # Step 3: run MCTS search
+                planner = MCTSPlanner(adapter, max_depth=5, max_iterations=20)
+                plan = await planner.search(message)
+
+                if not plan:
+                    # Search exhausted without finding plan — fall back to direct
+                    await ws_hub.send_stream(
+                        session_id,
+                        "⚠️ *Could not build a plan — attempting direct response.*\n\n"
+                    )
+                    await agent.run(session, message, ws_hub)
+                else:
+                    # Step 4: show plan to user before executing
+                    plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan))
+                    await ws_hub.send_stream(
+                        session_id,
+                        f"📋 *Plan:*\n{plan_text}\n\n"
+                    )
+
+                    # Step 5: inject plan as system context and run agent
+                    plan_context = (
+                        f"Execute this plan step by step to answer the user's request:\n"
+                        f"{plan_text}\n\n"
+                        f"User's original request: {message}"
+                    )
+                    # TODO(phase-4): plan_context is stored in session.history and
+                    # ChromaDB memory as if it were a real user message, polluting
+                    # future recall with "Execute this plan step by step..." strings.
+                    # Fix: pass original `message` for memory storage, plan_context
+                    # only for the LLM call (requires separating memory_message from
+                    # llm_message in BaseAgent.run signature).
+                    await agent.run(session, plan_context, ws_hub, send_done=False)
+
+                    # Step 6: verify the result (last assistant message in history)
+                    try:
+                        if session.history:
+                            last_response = next(
+                                (m["content"] for m in reversed(session.history)
+                                 if m["role"] == "assistant"),
+                                ""
+                            )
+                            verification = await verify_plan_result(
+                                adapter, message, last_response
+                            )
+                            if not verification.passed:
+                                await ws_hub.send_stream(
+                                    session_id,
+                                    f"\n⚠️ *Verification note: {verification.reason}*\n"
+                                )
+                    except Exception:
+                        pass  # verification is best-effort, never block done event
+                    finally:
+                        await ws_hub.send_done(
+                            session_id, {"prompt_tokens": 0, "completion_tokens": 0}
+                        )
+
         except Exception as e:
             await ws_hub.send_error(session_id, str(e))
         finally:
