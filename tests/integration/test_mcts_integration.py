@@ -63,7 +63,7 @@ def test_simple_message_bypasses_mcts(
     mock_verify.assert_not_called()
 
 
-@patch("app.core.session.BaseAgent")
+@patch("app.core.session.HydraCoordinator")
 @patch("app.core.session.verify_plan_result")
 @patch("app.core.session.MCTSPlanner")
 @patch("app.core.session.classify_task")
@@ -71,7 +71,7 @@ def test_complex_message_triggers_mcts_path(
     mock_classify: MagicMock,
     mock_mcts_class: MagicMock,
     mock_verify: MagicMock,
-    mock_base_agent_class: MagicMock,
+    mock_coordinator_class: MagicMock,
     client: TestClient,
     valid_token: str,
 ) -> None:
@@ -85,18 +85,19 @@ def test_complex_message_triggers_mcts_path(
 
     mock_verify.return_value = VerificationResult(passed=True, reason="")
 
-    mock_agent_instance = mock_base_agent_class.return_value
+    mock_coordinator_instance = mock_coordinator_class.return_value
 
     async def fake_run(
-        session: Any, message: str, hub: Any, send_done: bool = True
-    ) -> None:
-        session.history.append({"role": "user", "content": message})
-        await hub.send_stream(session.id, "agent response")
-        session.history.append({"role": "assistant", "content": "agent response"})
-        if send_done:
-            await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
+        plan: list[str],
+        original_task: str,
+        adapter: Any,
+        hub: Any,
+        session_id: str,
+    ) -> str:
+        await hub.send_stream(session_id, "agent response")
+        return "agent response"
 
-    mock_agent_instance.run = AsyncMock(side_effect=fake_run)
+    mock_coordinator_instance.run = AsyncMock(side_effect=fake_run)
 
     with client.websocket_connect(f"/ws/test-session?token={valid_token}") as ws:
         ws.send_json({
@@ -209,7 +210,7 @@ def test_complex_message_with_empty_plan_falls_back_to_direct(
     assert mock_agent_instance.run.call_args[0][1] == "refactor code"
 
 
-@patch("app.core.session.BaseAgent")
+@patch("app.core.session.HydraCoordinator")
 @patch("app.core.session.verify_plan_result")
 @patch("app.core.session.MCTSPlanner")
 @patch("app.core.session.classify_task")
@@ -217,7 +218,7 @@ def test_complex_message_with_failed_verification_shows_warning(
     mock_classify: MagicMock,
     mock_mcts_class: MagicMock,
     mock_verify: MagicMock,
-    mock_base_agent_class: MagicMock,
+    mock_coordinator_class: MagicMock,
     client: TestClient,
     valid_token: str,
 ) -> None:
@@ -229,18 +230,19 @@ def test_complex_message_with_failed_verification_shows_warning(
 
     mock_verify.return_value = VerificationResult(passed=False, reason="Incomplete")
 
-    mock_agent_instance = mock_base_agent_class.return_value
+    mock_coordinator_instance = mock_coordinator_class.return_value
 
     async def fake_run(
-        session: Any, message: str, hub: Any, send_done: bool = True
-    ) -> None:
-        session.history.append({"role": "user", "content": message})
-        await hub.send_stream(session.id, "bad response")
-        session.history.append({"role": "assistant", "content": "bad response"})
-        if send_done:
-            await hub.send_done(session.id, {"prompt_tokens": 0, "completion_tokens": 0})
+        plan: list[str],
+        original_task: str,
+        adapter: Any,
+        hub: Any,
+        session_id: str,
+    ) -> str:
+        await hub.send_stream(session_id, "bad response")
+        return "bad response"
 
-    mock_agent_instance.run = AsyncMock(side_effect=fake_run)
+    mock_coordinator_instance.run = AsyncMock(side_effect=fake_run)
 
     with client.websocket_connect(f"/ws/test-session?token={valid_token}") as ws:
         ws.send_json({

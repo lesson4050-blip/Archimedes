@@ -12,6 +12,8 @@ from app.agents.base import BaseAgent
 from app.agents.classifier import classify_task, TaskComplexity
 from app.agents.mcts import MCTSPlanner
 from app.agents.verify import verify_plan_result
+from app.agents.hydra import HydraCoordinator
+from app.memory.chroma import add_memory
 
 
 @dataclass
@@ -145,36 +147,29 @@ class SessionManager:
                         f"📋 *Plan:*\n{plan_text}\n\n"
                     )
 
-                    # Step 5: inject plan as system context and run agent
-                    plan_context = (
-                        f"Execute this plan step by step to answer the user's request:\n"
-                        f"{plan_text}\n\n"
-                        f"User's original request: {message}"
+                    # Step 5: run plan via HydraCoordinator
+                    coordinator = HydraCoordinator()
+                    result = await coordinator.run(
+                        plan, message, adapter, ws_hub, session_id
                     )
-                    # TODO(phase-4): plan_context is stored in session.history and
-                    # ChromaDB memory as if it were a real user message, polluting
-                    # future recall with "Execute this plan step by step..." strings.
-                    # Fix: pass original `message` for memory storage, plan_context
-                    # only for the LLM call (requires separating memory_message from
-                    # llm_message in BaseAgent.run signature).
-                    await agent.run(session, plan_context, ws_hub, send_done=False)
 
-                    # Step 6: verify the result (last assistant message in history)
+                    # Store aggregated result in session history and memory
+                    session.history.append({"role": "user", "content": message})
+                    session.history.append({"role": "assistant", "content": result})
+
+                    await add_memory(session.user_id, session.id, "user", message)
+                    await add_memory(session.user_id, session.id, "assistant", result)
+
+                    # Step 6: verify the result (aggregated coordinator output)
                     try:
-                        if session.history:
-                            last_response = next(
-                                (m["content"] for m in reversed(session.history)
-                                 if m["role"] == "assistant"),
-                                ""
+                        verification = await verify_plan_result(
+                            adapter, message, result
+                        )
+                        if not verification.passed:
+                            await ws_hub.send_stream(
+                                session_id,
+                                f"\n⚠️ *Verification note: {verification.reason}*\n"
                             )
-                            verification = await verify_plan_result(
-                                adapter, message, last_response
-                            )
-                            if not verification.passed:
-                                await ws_hub.send_stream(
-                                    session_id,
-                                    f"\n⚠️ *Verification note: {verification.reason}*\n"
-                                )
                     except Exception:
                         pass  # verification is best-effort, never block done event
                     finally:

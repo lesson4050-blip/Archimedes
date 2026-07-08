@@ -130,6 +130,57 @@ class WSHub:
             },
         )
 
+    async def send_swarm_start(self, session_id: str, total_steps: int, batches: list[list[int]]) -> None:
+        """Broadcast a swarm_start event.
+
+        Args:
+            session_id: The ID of the session.
+            total_steps: The total number of steps in the plan.
+            batches: The batches containing step indices.
+        """
+        await self.broadcast(
+            session_id,
+            {
+                "type": "swarm_start",
+                "session_id": session_id,
+                "payload": {"total_steps": total_steps, "batches": batches},
+            },
+        )
+
+    async def send_worker_start(self, session_id: str, step_index: int, description: str) -> None:
+        """Broadcast a worker_start event.
+
+        Args:
+            session_id: The ID of the session.
+            step_index: The index of the plan step.
+            description: The description of the step.
+        """
+        await self.broadcast(
+            session_id,
+            {
+                "type": "worker_start",
+                "session_id": session_id,
+                "payload": {"step_index": step_index, "description": description},
+            },
+        )
+
+    async def send_worker_done(self, session_id: str, step_index: int, result_preview: str) -> None:
+        """Broadcast a worker_done event.
+
+        Args:
+            session_id: The ID of the session.
+            step_index: The index of the plan step.
+            result_preview: First 100 characters of the result + "..." if longer.
+        """
+        await self.broadcast(
+            session_id,
+            {
+                "type": "worker_done",
+                "session_id": session_id,
+                "payload": {"step_index": step_index, "result_preview": result_preview},
+            },
+        )
+
 
 # Singleton — one hub per process
 ws_hub: WSHub = WSHub()
