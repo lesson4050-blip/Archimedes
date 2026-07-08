@@ -153,6 +153,11 @@ class SessionManager:
                         plan, message, adapter, ws_hub, session_id
                     )
 
+                    # Stream aggregated result to user
+                    await ws_hub.send_stream(
+                        session_id, f"\n---\n\n{result}"
+                    )
+
                     # Store aggregated result in session history and memory
                     session.history.append({"role": "user", "content": message})
                     session.history.append({"role": "assistant", "content": result})

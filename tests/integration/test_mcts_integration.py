@@ -106,13 +106,14 @@ def test_complex_message_triggers_mcts_path(
             "payload": {"message": "refactor code"},
         })
 
-        # Expect exactly 5 events:
+        # Expect exactly 6 events:
         # 1. planning
         # 2. "Complex task detected" stream
         # 3. "Plan:" stream
-        # 4. "agent response" stream
-        # 5. done
-        events = [ws.receive_json() for _ in range(5)]
+        # 4. "agent response" stream (from coordinator)
+        # 5. aggregated result stream
+        # 6. done
+        events = [ws.receive_json() for _ in range(6)]
 
         types = [e["type"] for e in events]
         assert "planning" in types
@@ -251,14 +252,15 @@ def test_complex_message_with_failed_verification_shows_warning(
             "payload": {"message": "refactor code"},
         })
 
-        # Expect exactly 6 events:
+        # Expect exactly 7 events:
         # 1. planning
         # 2. "Complex task detected" stream
         # 3. "Plan:" stream
-        # 4. "bad response" stream
-        # 5. "Verification note: Incomplete" stream
-        # 6. done
-        events = [ws.receive_json() for _ in range(6)]
+        # 4. "bad response" stream (from coordinator)
+        # 5. aggregated result stream
+        # 6. "Verification note: Incomplete" stream
+        # 7. done
+        events = [ws.receive_json() for _ in range(7)]
 
         types = [e["type"] for e in events]
         assert "planning" in types
