@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.agents.base import BaseAgent
+from app.agents.base import BaseAgent, SYSTEM_PROMPT
 from app.core.session import Session
 from app.core.ws_hub import WSHub
 from app.models.base import ModelAdapter
@@ -67,9 +67,18 @@ async def test_agent_appends_assistant_message_to_history() -> None:
 
     await agent.run(session, "hello agent", hub)
     
-    # Session history should end with assistant response
+    # Session history should end with assistant response, and must NOT contain the system prompt
     assert len(session.history) == 2
+    assert session.history[0] == {"role": "user", "content": "hello agent"}
     assert session.history[1] == {"role": "assistant", "content": "Hello world"}
+    
+    # Explicitly check system message is NOT in session.history
+    for msg in session.history:
+        assert msg.get("role") != "system" or msg.get("content") != SYSTEM_PROMPT
+
+    # Verify adapter received the prepended system prompt
+    assert len(adapter.calls) == 1
+    assert adapter.calls[0]["messages"][0] == {"role": "system", "content": SYSTEM_PROMPT}
 
 
 @pytest.mark.asyncio

@@ -13,6 +13,13 @@ if TYPE_CHECKING:
 
 _MEMORY_PREFIX = "Relevant context from past conversations:\n"
 
+SYSTEM_PROMPT = (
+    "You are Archimedes, an autonomous AI agent. "
+    "Be direct and concise. No filler phrases, no emojis. "
+    "When executing a plan, focus on the task. "
+    "Respond in the same language the user writes in."
+)
+
 
 class BaseAgent:
     """Standard conversational agent that communicates via WebSocket hub."""
@@ -67,7 +74,11 @@ class BaseAgent:
         try:
             # Explicitly disable thinking mode (ADR-012) to avoid latency inflation
             # and token starvation/truncation, since reasoning is not surfaced in UI.
-            async for delta in self.adapter.stream(session.history, think=False):
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                *session.history,
+            ]
+            async for delta in self.adapter.stream(messages, think=False):
                 if session.cancel_requested:
                     break
                 full_response += delta
