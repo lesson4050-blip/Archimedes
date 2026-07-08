@@ -72,13 +72,13 @@
 
 **Goal:** Parallel agent execution for independent subtasks.
 
-- [ ] HydraSwarm coordinator
-- [ ] Async worker agent pool
-- [ ] Shared Blackboard for inter-agent context
-- [ ] Task dependency graph (topological sort)
-- [ ] Conflict resolution for concurrent file writes
-- [ ] Progress monitoring in UI
-- [ ] Load balancing across workers
+- [x] HydraSwarm coordinator
+- [x] Async worker agent pool
+- [x] Shared Blackboard for inter-agent context
+- [x] Task dependency graph (topological sort)
+- [x] Conflict resolution for concurrent file writes
+- [x] Progress monitoring in UI
+- [x] Load balancing across workers
 
 **Done criteria:** 3 independent subtasks complete 3x faster than sequential execution.
 

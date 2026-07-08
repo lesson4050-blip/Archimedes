@@ -36,7 +36,8 @@ Self-hosted, multi-surface autonomous AI agent platform. Run AI agents that plan
 | Task Classifier | app/agents/classifier.py | Task complexity classification (SIMPLE/COMPLEX) via cheap LLM call |
 | MCTS Planner | app/agents/mcts.py | UCB1 tree search, task decomposition |
 | MoA | app/agents/moa.py | Multi-model ensemble + CoT aggregation |
-| HydraSwarm | app/agents/hydra.py | Parallel agent pool |
+| HydraSwarm | app/agents/hydra.py | HydraCoordinator + DependencyGraph |
+| Worker Agent | app/agents/worker.py | WorkerAgent |
 | CodeAct | app/agents/codeact.py | Python sandbox execution |
 | Router | app/agents/router.py | Model selection by task complexity |
 | Verifier | app/agents/verify.py | Output validation |
@@ -58,7 +59,7 @@ Self-hosted, multi-surface autonomous AI agent platform. Run AI agents that plan
 |-----------|------|-------------|
 | Vector Store | app/memory/chroma.py | Semantic search via ChromaDB |
 | State Store | app/memory/sqlite.py | Structured state in SQLite |
-| Blackboard | app/memory/blackboard.py | Shared agent context |
+| Blackboard | app/memory/blackboard.py | SharedBlackboard |
 | Skill Library | app/memory/skills.py | Reusable task patterns |
 
 ### Models (app/models/)
