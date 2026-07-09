@@ -249,3 +249,53 @@ async def test_worker_runs_directly_when_no_tool_call(mock_run_sem: MagicMock) -
     entry = await blackboard.read(0)
     assert entry is not None
     assert entry.result == "Direct answer, no tools needed"
+
+
+@pytest.mark.asyncio
+@patch("app.agents.worker.tool_registry")
+@patch("app.agents.worker._run_with_semaphore")
+async def test_worker_uses_tool_on_single_line_tool_call(
+    mock_run_sem: MagicMock,
+    mock_registry: MagicMock,
+) -> None:
+    """Worker detects single-line TOOL_CALL: tool PARAMS: {} (no newline), executes it, and works."""
+    mock_run_sem.side_effect = [
+        "TOOL_CALL: fake_tool PARAMS: {\"query\": \"test\"}",
+        "Final answer after single-line tool",
+    ]
+
+    class _FakeTool(BaseTool):
+        name: str = "fake_tool"
+        description: str = "A fake tool"
+        parameters_schema: dict[str, str] = {"query": "The query"}
+
+        async def execute(self, **kwargs: str) -> ToolResult:  # type: ignore[override]
+            return ToolResult(tool_name="fake_tool", success=True, output="tool output")
+
+    fake_registry = ToolRegistry()
+    fake_registry.register(_FakeTool())
+
+    mock_registry.all_tools.return_value = fake_registry.all_tools()
+    mock_registry.tool_descriptions_for_prompt.return_value = (
+        fake_registry.tool_descriptions_for_prompt()
+    )
+    mock_registry.execute = AsyncMock(
+        return_value=ToolResult(tool_name="fake_tool", success=True, output="tool output")
+    )
+
+    blackboard = SharedBlackboard()
+    adapter = MagicMock(spec=ModelAdapter)
+    worker = WorkerAgent(
+        worker_id="single-line-worker",
+        step_index=0,
+        step_description="Search single line",
+        adapter=adapter,
+        blackboard=blackboard,
+    )
+
+    result = await worker.execute("Single-line task", dep_indices=set())
+
+    assert result == "Final answer after single-line tool"
+    assert mock_run_sem.call_count == 2
+    mock_registry.execute.assert_called_once_with("fake_tool", {"query": "test"})
+

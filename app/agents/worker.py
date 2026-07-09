@@ -109,7 +109,7 @@ class WorkerAgent:
             result_text = await _run_with_semaphore(self.adapter, messages)
 
             tool_match = re.search(
-                r"TOOL_CALL:\s*(\w+)\s*\nPARAMS:\s*(\{.*?\})",
+                r"TOOL_CALL:\s*(\w+)\s+PARAMS:\s*(\{.*?\})",
                 result_text,
                 re.DOTALL,
             )

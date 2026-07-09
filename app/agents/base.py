@@ -85,7 +85,7 @@ class BaseAgent:
 
             # Detect tool call
             tool_match = re.search(
-                r"TOOL_CALL:\s*(\w+)\s*\nPARAMS:\s*(\{.*?\})",
+                r"TOOL_CALL:\s*(\w+)\s+PARAMS:\s*(\{.*?\})",
                 response_text,
                 re.DOTALL,
             )
