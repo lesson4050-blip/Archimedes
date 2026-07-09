@@ -1,9 +1,44 @@
-"""Browser automation tool for reading webpage content using Playwright."""
+"""Browser automation tool for reading webpage content using Playwright.
+
+Note: Uses the synchronous Playwright API executed in a thread pool because
+Python 3.14 on Windows uses WindowsProactorEventLoop which does not support
+asyncio.create_subprocess_exec (required by async Playwright). Running sync
+Playwright in asyncio.to_thread sidesteps this limitation entirely.
+"""
 
 from __future__ import annotations
+import asyncio
 from app.tools.base import BaseTool, ToolResult
 
 MAX_CHARS = 8000  # prevent context overflow
+
+
+def _fetch_page_sync(url: str) -> str:
+    """Fetch and extract text from a webpage using sync Playwright.
+
+    Args:
+        url: The full HTTPS URL to load.
+
+    Returns:
+        Cleaned page text, truncated to MAX_CHARS.
+
+    Raises:
+        Exception: Any Playwright or network error.
+    """
+    from playwright.sync_api import sync_playwright  # lazy import
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(url, timeout=20000, wait_until="domcontentloaded")
+        text = page.inner_text("body")
+        browser.close()
+
+    cleaned = "\n".join(
+        line.strip() for line in text.splitlines() if line.strip()
+    )
+    if len(cleaned) > MAX_CHARS:
+        cleaned = cleaned[:MAX_CHARS] + f"\n\n[Truncated at {MAX_CHARS} chars]"
+    return cleaned
 
 
 class BrowserTool(BaseTool):
@@ -18,6 +53,9 @@ class BrowserTool(BaseTool):
 
     async def execute(self, *, url: str = "", **kwargs: str) -> ToolResult:
         """Execute the webpage text extraction.
+
+        Runs sync Playwright in a thread pool to avoid ProactorEventLoop
+        incompatibility on Python 3.14 / Windows.
 
         Args:
             url: The full URL to load.
@@ -43,21 +81,7 @@ class BrowserTool(BaseTool):
             )
 
         try:
-            from playwright.async_api import async_playwright  # lazy import
-            async with async_playwright() as p:
-                browser = await p.chromium.launch(headless=True)
-                page = await browser.new_page()
-                await page.goto(url, timeout=20000, wait_until="domcontentloaded")
-                text = await page.inner_text("body")
-                await browser.close()
-
-            # Clean up whitespace
-            cleaned = "\n".join(
-                line.strip() for line in text.splitlines() if line.strip()
-            )
-            if len(cleaned) > MAX_CHARS:
-                cleaned = cleaned[:MAX_CHARS] + f"\n\n[Truncated at {MAX_CHARS} chars]"
-
+            cleaned = await asyncio.to_thread(_fetch_page_sync, url)
             return ToolResult(
                 tool_name=self.name,
                 success=True,
@@ -68,8 +92,7 @@ class BrowserTool(BaseTool):
             if (
                 "executable" in err_str.lower()
                 or "playwright install" in err_str.lower()
-                or "browser" in err_str.lower()
-                and "not" in err_str.lower()
+                or ("browser" in err_str.lower() and "not" in err_str.lower())
             ):
                 err_str = (
                     "Playwright browser not installed. Run: playwright install chromium"
