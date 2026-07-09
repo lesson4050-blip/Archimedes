@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     debug: bool = True
     ollama_base_url: str = "http://localhost:11434"
     local_model: str = "qwen3:14b"
+    tavily_api_key: str = ""
 
     # ── Memory ──────────────────────────────────────────────
     chroma_path: str = "./data/chroma_db"

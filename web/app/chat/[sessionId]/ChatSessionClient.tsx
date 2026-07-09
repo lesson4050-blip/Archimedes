@@ -68,12 +68,35 @@ export default function ChatSessionClient(): React.JSX.Element {
         const delta = (event.payload.delta as string) || ""
         streamingContentRef.current += delta
         setStreamingContent(streamingContentRef.current)
+      } else if (event.type === "tool_call") {
+        const toolName = (event.payload.tool as string) || ""
+        setLocalMessages((prev) => [
+          ...prev,
+          {
+            type: "tool_call",
+            tool: toolName,
+            payload: event.payload.input as Record<string, unknown>,
+          },
+        ])
+      } else if (event.type === "tool_result") {
+        const toolName = (event.payload.tool as string) || ""
+        setLocalMessages((prev) => [
+          ...prev,
+          {
+            type: "tool_result",
+            tool: toolName,
+            payload: {
+              success: event.payload.success as boolean,
+              output: event.payload.output as string,
+            },
+          },
+        ])
       } else if (event.type === "done") {
         const finalContent = streamingContentRef.current
         if (finalContent) {
           setLocalMessages((prev) => [
             ...prev,
-            { role: "assistant", content: finalContent },
+            { type: "message", role: "assistant", content: finalContent },
           ])
         }
         streamingContentRef.current = ""
@@ -82,7 +105,7 @@ export default function ChatSessionClient(): React.JSX.Element {
         const errorMsg = (event.payload.message as string) || "Unknown error occurred"
         setLocalMessages((prev) => [
           ...prev,
-          { role: "assistant", content: `Error: ${errorMsg}` },
+          { type: "message", role: "assistant", content: `Error: ${errorMsg}` },
         ])
         streamingContentRef.current = ""
         setStreamingContent("")

@@ -46,10 +46,12 @@ Self-hosted, multi-surface autonomous AI agent platform. Run AI agents that plan
 
 | Tool | File | Description |
 |------|------|-------------|
+| Base Tool | app/tools/base.py | BaseTool ABC + ToolResult |
+| Tool Registry | app/tools/registry.py | ToolRegistry singleton |
+| Web Search | app/tools/search.py | WebSearchTool (Tavily) |
+| Browser | app/tools/browser.py | BrowserTool (Playwright) |
 | Bash | app/tools/bash.py | Sandboxed terminal execution |
 | FileSystem | app/tools/filesystem.py | Read/write with path validation |
-| Web Search | app/tools/search.py | Web search via API |
-| Browser | app/tools/browser.py | Playwright browser agent |
 | Git | app/tools/git.py | Repository operations |
 | Memory | app/tools/memory.py | ChromaDB read/write |
 
