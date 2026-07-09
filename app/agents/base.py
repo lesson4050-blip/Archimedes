@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import json
 import re
 from typing import TYPE_CHECKING
@@ -84,12 +85,13 @@ class BaseAgent:
             )
 
             if not tool_match:
-                # Final answer — stream delta by delta, not as one chunk
-                async for delta in self.adapter.stream(tool_messages, think=False):
+                # Stream already-collected chunks — no second LLM call
+                # chunks contains the real token deltas from the first stream() call
+                for chunk in chunks:
                     if session.cancel_requested:
                         break
-                    await hub.send_stream(session.id, delta)
-                    full_response += delta
+                    await hub.send_stream(session.id, chunk)
+                full_response = response_text
                 break
 
             tool_name = tool_match.group(1).strip()
@@ -180,7 +182,6 @@ class BaseAgent:
         try:
             from app.tools.registry import tool_registry
 
-            from datetime import datetime
             tool_desc = tool_registry.tool_descriptions_for_prompt()
             current_date_str = datetime.now().strftime("%B %d, %Y")
             system_content = f"{SYSTEM_PROMPT}\n\nCurrent Date: {current_date_str}"

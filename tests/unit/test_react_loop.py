@@ -73,7 +73,7 @@ async def test_react_loop_executes_tool_and_injects_result(clean_registry: ToolR
     
     await agent.run(session, "what's the news?", hub)
     
-    assert adapter.calls == 3
+    assert adapter.calls == 2
     last_call_messages = adapter.messages_called[1]
     assert any("Fake results for: today's news" in m["content"] for m in last_call_messages)
     all_streamed = "".join(
