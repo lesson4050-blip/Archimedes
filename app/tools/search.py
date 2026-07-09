@@ -2,12 +2,15 @@
 
 Priority:
 1. If TAVILY_API_KEY is set and valid → use Tavily (best quality, summarised answers).
-2. Otherwise → use DuckDuckGo via duckduckgo-search (no API key required).
+2. Otherwise → use DuckDuckGo text API (fast fallback).
+3. If DuckDuckGo text API returns empty or fails → use DuckDuckGo HTML scraper (extremely robust).
 """
 
 from __future__ import annotations
 import asyncio
+import urllib.parse
 import httpx
+from bs4 import BeautifulSoup
 from app.tools.base import BaseTool, ToolResult
 from app.core.config import get_settings
 
@@ -27,7 +30,8 @@ def _ddg_search_sync(query: str, max_results: int = 5) -> str:
         results = list(ddgs.text(query, max_results=max_results))
 
     if not results:
-        return "No results found."
+        # Trigger fallback to HTML scraper if empty
+        return _ddg_html_search_sync(query, max_results)
 
     lines: list[str] = []
     for r in results:
@@ -36,6 +40,66 @@ def _ddg_search_sync(query: str, max_results: int = 5) -> str:
         body = r.get("body", "")
         if body:
             lines.append(f"  {body[:300]}...")
+        lines.append("")
+    return "\n".join(lines)
+
+
+def _ddg_html_search_sync(query: str, max_results: int = 5) -> str:
+    """Fallback DuckDuckGo scraper using the public HTML interface.
+
+    Extremely reliable even when API clients are rate-limited or blocked.
+
+    Args:
+        query: The search query string.
+        max_results: Maximum number of results.
+
+    Returns:
+        Formatted search results.
+    """
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+    url = f"https://html.duckduckgo.com/html/?q={urllib.parse.quote(query)}"
+    
+    # Run sync request
+    with httpx.Client(timeout=12.0) as client:
+        resp = client.get(url, headers=headers)
+        resp.raise_for_status()
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    results = []
+    for a in soup.find_all("a", class_="result__snippet"):
+        parent = a.find_parent("div", class_="result__body")
+        if parent:
+            title_a = parent.find("a", class_="result__url")
+            if title_a:
+                href = str(title_a.get("href") or "")
+                # Parse redirect link if present
+                if "uddg=" in href:
+                    parsed = urllib.parse.urlparse(href)
+                    qs = urllib.parse.parse_qs(parsed.query)
+                    actual_url = qs.get("uddg", [href])[0]
+                else:
+                    actual_url = href
+
+                results.append({
+                    "title": title_a.text.strip(),
+                    "href": actual_url,
+                    "body": a.text.strip()
+                })
+
+    if not results:
+        return "No results found."
+
+    lines: list[str] = []
+    for r in results[:max_results]:
+        lines.append(f"• {r['title']}")
+        lines.append(f"  {r['href']}")
+        lines.append(f"  {r['body'][:300]}...")
         lines.append("")
     return "\n".join(lines)
 
@@ -137,8 +201,8 @@ class WebSearchTool(BaseTool):
     async def _search_ddg(self, query: str) -> ToolResult:
         """Search using DuckDuckGo — no API key required.
 
-        Runs the synchronous DDGS client in a thread pool to stay async-safe,
-        matching the same pattern used in BrowserTool.
+        Runs the synchronous DDGS client / HTML scraper in a thread pool to stay
+        async-safe.
 
         Args:
             query: The search query string.
@@ -154,9 +218,18 @@ class WebSearchTool(BaseTool):
                 output=output,
             )
         except Exception as e:
-            return ToolResult(
-                tool_name=self.name,
-                success=False,
-                output="",
-                error=f"DuckDuckGo search failed: {e}",
-            )
+            # If the library completely fails, try the HTML scraper directly
+            try:
+                output = await asyncio.to_thread(_ddg_html_search_sync, query, 5)
+                return ToolResult(
+                    tool_name=self.name,
+                    success=True,
+                    output=output,
+                )
+            except Exception as inner_e:
+                return ToolResult(
+                    tool_name=self.name,
+                    success=False,
+                    output="",
+                    error=f"DuckDuckGo search failed: {e}. Fallback failed: {inner_e}",
+                )

@@ -127,8 +127,12 @@ async def test_search_tool_ddg_error_returns_failed_result() -> None:
         with patch(
             "app.tools.search._ddg_search_sync",
             side_effect=Exception("network timeout"),
+        ), patch(
+            "app.tools.search._ddg_html_search_sync",
+            side_effect=Exception("html timeout"),
         ):
             tool = WebSearchTool()
             res = await tool.execute(query="test query")
             assert not res.success
             assert "DuckDuckGo search failed" in res.error
+            assert "html timeout" in res.error
