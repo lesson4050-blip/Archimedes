@@ -1,6 +1,8 @@
 """Specialist worker agent for executing isolated plan steps."""
 
 from __future__ import annotations
+import json as _json
+import re
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
@@ -9,12 +11,19 @@ if TYPE_CHECKING:
 
 from app.agents.hydra import _run_with_semaphore
 from app.memory.blackboard import SharedBlackboard, BlackboardEntry
+from app.tools.registry import tool_registry
 
+MAX_WORKER_TOOL_ITERATIONS = 3
 
 WORKER_SYSTEM_PROMPT = (
     "You are a specialist agent executing ONE specific task. "
     "Be direct. Output only what is requested for this specific step. "
-    "Do not summarize other steps or add commentary."
+    "Do not summarize other steps or add commentary. "
+    "For any time-sensitive query (sports, news, events, prices, schedules): "
+    "ALWAYS include the current date in your search query to find results "
+    "AFTER today, not historical ones. "
+    "Example: instead of 'next World Cup 2026 match' "
+    "use 'next World Cup 2026 match after [today's date]'."
 )
 
 
@@ -50,7 +59,12 @@ class WorkerAgent:
         original_task: str,
         dep_indices: set[int],
     ) -> str:
-        """Execute this step and write result to blackboard.
+        """Execute this step via a mini ReAct loop and write result to blackboard.
+
+        Runs up to MAX_WORKER_TOOL_ITERATIONS LLM calls. If the model emits a
+        TOOL_CALL, the tool is executed silently (no WS events) and the result
+        is fed back into the conversation. When the model responds without a
+        TOOL_CALL the loop exits and the response is written to the blackboard.
 
         Args:
             original_task: The original user request.
@@ -64,8 +78,21 @@ class WorkerAgent:
         if prereqs:
             context = "Context from previous steps:\n" + "\n".join(prereqs) + "\n\n"
 
-        messages = [
-            {"role": "system", "content": WORKER_SYSTEM_PROMPT},
+        tool_desc = tool_registry.tool_descriptions_for_prompt()
+        tool_suffix = ""
+        if tool_registry.all_tools():
+            current_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
+            tool_suffix = (
+                f"\nCurrent Date: {current_date}\n\n"
+                f"{tool_desc}\n\n"
+                "To use a tool respond with:\n"
+                "TOOL_CALL: tool_name\n"
+                'PARAMS: {"param": "value"}\n'
+                "Otherwise respond directly."
+            )
+
+        messages: list[dict[str, str]] = [
+            {"role": "system", "content": WORKER_SYSTEM_PROMPT + tool_suffix},
             {
                 "role": "user",
                 "content": (
@@ -76,16 +103,47 @@ class WorkerAgent:
             },
         ]
 
-        result = await _run_with_semaphore(self.adapter, messages)
+        full_result = ""
+        result_text = ""
+        for _ in range(MAX_WORKER_TOOL_ITERATIONS):
+            result_text = await _run_with_semaphore(self.adapter, messages)
+
+            tool_match = re.search(
+                r"TOOL_CALL:\s*(\w+)\s*\nPARAMS:\s*(\{.*?\})",
+                result_text,
+                re.DOTALL,
+            )
+            if not tool_match:
+                full_result = result_text
+                break
+
+            tool_name = tool_match.group(1).strip()
+            try:
+                params = _json.loads(tool_match.group(2))
+            except Exception:
+                params = {}
+
+            tool_result = await tool_registry.execute(tool_name, params)
+            messages.append({"role": "assistant", "content": result_text})
+            messages.append({
+                "role": "user",
+                "content": (
+                    f"Tool '{tool_name}' result:\n{tool_result.output}"
+                    if tool_result.success
+                    else f"Tool '{tool_name}' failed: {tool_result.error}"
+                ),
+            })
+        else:
+            full_result = result_text
 
         await self.blackboard.write(
             self.step_index,
             BlackboardEntry(
                 step_index=self.step_index,
                 step_description=self.step_description,
-                result=result,
+                result=full_result,
                 worker_id=self.worker_id,
                 completed_at=datetime.now(timezone.utc).isoformat(),
             ),
         )
-        return result
+        return full_result
