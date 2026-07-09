@@ -26,6 +26,12 @@ SYSTEM_PROMPT = (
 TOOL_USE_PROMPT_SUFFIX = """
 {tool_descriptions}
 
+For any time-sensitive query (sports, news, events, prices, schedules):
+ALWAYS include the current date in your search query to find results
+AFTER today, not historical ones.
+Example: instead of 'next World Cup 2026 match'
+use 'next World Cup 2026 match after [today's date]'
+
 To use a tool, respond with EXACTLY this format (no other text before it):
 TOOL_CALL: tool_name
 PARAMS: {{"param_name": "value"}}
