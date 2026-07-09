@@ -180,8 +180,10 @@ class BaseAgent:
         try:
             from app.tools.registry import tool_registry
 
+            from datetime import datetime
             tool_desc = tool_registry.tool_descriptions_for_prompt()
-            system_content = SYSTEM_PROMPT
+            current_date_str = datetime.now().strftime("%B %d, %Y")
+            system_content = f"{SYSTEM_PROMPT}\n\nCurrent Date: {current_date_str}"
             if tool_registry.all_tools():
                 system_content += f"\n\n{TOOL_USE_PROMPT_SUFFIX.format(tool_descriptions=tool_desc)}"
 

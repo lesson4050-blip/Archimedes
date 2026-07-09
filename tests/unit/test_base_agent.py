@@ -82,8 +82,10 @@ async def test_agent_appends_assistant_message_to_history() -> None:
         assert msg.get("role") != "system" or msg.get("content") != SYSTEM_PROMPT
 
     # Verify adapter received the prepended system prompt
+    from datetime import datetime
+    expected_system_content = f"{SYSTEM_PROMPT}\n\nCurrent Date: {datetime.now().strftime('%B %d, %Y')}"
     assert len(adapter.calls) == 1
-    assert adapter.calls[0]["messages"][0] == {"role": "system", "content": SYSTEM_PROMPT}
+    assert adapter.calls[0]["messages"][0] == {"role": "system", "content": expected_system_content}
 
 
 @pytest.mark.asyncio
