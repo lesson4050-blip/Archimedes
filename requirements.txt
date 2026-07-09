@@ -35,6 +35,9 @@ httpx>=0.28.0
 # Browser Automation
 playwright>=1.49.0
 
+# Web Search (no-key fallback)
+duckduckgo-search>=8.0.0
+
 # Async
 anyio>=4.7.0
 aiofiles>=24.1.0
