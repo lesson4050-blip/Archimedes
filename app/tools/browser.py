@@ -64,9 +64,19 @@ class BrowserTool(BaseTool):
                 output=cleaned,
             )
         except Exception as e:
+            err_str = str(e)
+            if (
+                "executable" in err_str.lower()
+                or "playwright install" in err_str.lower()
+                or "browser" in err_str.lower()
+                and "not" in err_str.lower()
+            ):
+                err_str = (
+                    "Playwright browser not installed. Run: playwright install chromium"
+                )
             return ToolResult(
                 tool_name=self.name,
                 success=False,
                 output="",
-                error=str(e),
+                error=err_str,
             )
