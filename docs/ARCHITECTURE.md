@@ -48,7 +48,7 @@ Self-hosted, multi-surface autonomous AI agent platform. Run AI agents that plan
 |------|------|-------------|
 | Base Tool | app/tools/base.py | BaseTool ABC + ToolResult |
 | Tool Registry | app/tools/registry.py | ToolRegistry singleton |
-| Web Search | app/tools/search.py | WebSearchTool (Tavily) |
+| Web Search | app/tools/search.py | WebSearchTool (Tavily primary, DuckDuckGo fallback) |
 | Browser | app/tools/browser.py | BrowserTool (Playwright) |
 | Bash | app/tools/bash.py | Sandboxed terminal execution |
 | FileSystem | app/tools/filesystem.py | Read/write with path validation |

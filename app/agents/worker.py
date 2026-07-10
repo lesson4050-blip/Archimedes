@@ -108,23 +108,10 @@ class WorkerAgent:
         for iteration in range(MAX_WORKER_TOOL_ITERATIONS):
             result_text = await _run_with_semaphore(self.adapter, messages)
 
-            # Debug logging — visible in uvicorn stderr
-            print(
-                f"[WORKER {self.worker_id}] iter={iteration} "
-                f"response_preview={result_text[:200]!r}",
-                flush=True,
-            )
-
             tool_match = re.search(
                 r"TOOL_CALL:\s*(\w+)\s+PARAMS:\s*(\{.*?\})",
                 result_text,
                 re.DOTALL,
-            )
-
-            print(
-                f"[WORKER {self.worker_id}] iter={iteration} "
-                f"tool_match={'YES: ' + tool_match.group(1) if tool_match else 'NO'}",
-                flush=True,
             )
 
             if not tool_match:
@@ -138,14 +125,6 @@ class WorkerAgent:
                 params = {}
 
             tool_result = await tool_registry.execute(tool_name, params)
-
-            print(
-                f"[WORKER {self.worker_id}] iter={iteration} "
-                f"tool={tool_name} success={tool_result.success} "
-                f"output_len={len(tool_result.output)} "
-                f"error={tool_result.error!r}",
-                flush=True,
-            )
 
             messages.append({"role": "assistant", "content": result_text})
             messages.append({
