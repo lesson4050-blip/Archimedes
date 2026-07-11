@@ -105,6 +105,12 @@ class WorkerAgent:
 
         full_result = ""
         result_text = ""
+        user_snippet = original_task[:80] if original_task else ""
+        lang_reminder = (
+            f"(The user wrote: \"{user_snippet}\" — "
+            "you MUST reply in the SAME language as that message.)"
+        ) if user_snippet else ""
+
         for iteration in range(MAX_WORKER_TOOL_ITERATIONS):
             result_text = await _run_with_semaphore(self.adapter, messages)
 
@@ -135,17 +141,23 @@ class WorkerAgent:
             messages.append({
                 "role": "user",
                 "content": (
-                    f"{tool_result_text}\n\n"
-                    "(Remember: reply in the same language the user used.)"
+                    f"{tool_result_text}\n\n{lang_reminder}"
+                    if lang_reminder
+                    else tool_result_text
                 ),
             })
         else:
             # Loop exhausted — force final answer without tools
+            exhausted_prompt = (
+                "Please summarize what you found so far. "
+                "Do not call any more tools. Give a direct answer."
+            )
             messages.append({
                 "role": "user",
                 "content": (
-                    "Please summarize what you found so far. "
-                    "Do not call any more tools. Give a direct answer."
+                    f"{exhausted_prompt}\n\n{lang_reminder}"
+                    if lang_reminder
+                    else exhausted_prompt
                 ),
             })
             full_result = await _run_with_semaphore(self.adapter, messages)
