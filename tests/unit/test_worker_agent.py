@@ -206,8 +206,12 @@ async def test_worker_respects_max_worker_tool_iterations(
         return_value=ToolResult(tool_name="looping_tool", success=True, output="looped")
     )
 
-    # Always return a TOOL_CALL so the loop never breaks early
-    mock_run_sem.return_value = "TOOL_CALL: looping_tool\nPARAMS: {}"
+    # Always return a TOOL_CALL for loop iterations, then a clean answer for
+    # the forced summary call after loop exhaustion.
+    tool_call_text = "TOOL_CALL: looping_tool\nPARAMS: {}"
+    mock_run_sem.side_effect = [tool_call_text] * MAX_WORKER_TOOL_ITERATIONS + [
+        "Summary after exhausted loop"
+    ]
 
     blackboard = SharedBlackboard()
     adapter = MagicMock(spec=ModelAdapter)
@@ -219,10 +223,11 @@ async def test_worker_respects_max_worker_tool_iterations(
         blackboard=blackboard,
     )
 
-    await worker.execute("Infinite loop task", dep_indices=set())
+    result = await worker.execute("Infinite loop task", dep_indices=set())
 
-    # LLM must be called exactly MAX_WORKER_TOOL_ITERATIONS times — never more
-    assert mock_run_sem.call_count == MAX_WORKER_TOOL_ITERATIONS
+    # LLM called MAX_WORKER_TOOL_ITERATIONS times in-loop + 1 forced summary
+    assert mock_run_sem.call_count == MAX_WORKER_TOOL_ITERATIONS + 1
+    assert result == "Summary after exhausted loop"
 
 
 @pytest.mark.asyncio

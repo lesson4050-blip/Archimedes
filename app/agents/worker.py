@@ -136,7 +136,15 @@ class WorkerAgent:
                 ),
             })
         else:
-            full_result = result_text
+            # Loop exhausted — force final answer without tools
+            messages.append({
+                "role": "user",
+                "content": (
+                    "Please summarize what you found so far. "
+                    "Do not call any more tools. Give a direct answer."
+                ),
+            })
+            full_result = await _run_with_semaphore(self.adapter, messages)
 
         await self.blackboard.write(
             self.step_index,
