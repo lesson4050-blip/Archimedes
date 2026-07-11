@@ -42,6 +42,7 @@ PARAMS: {{"param_name": "value"}}
 
 After receiving tool results, continue your response normally.
 If you don't need any tools, respond directly without the TOOL_CALL prefix.
+IMPORTANT: Always reply in the same language the user used.
 """
 
 MAX_TOOL_ITERATIONS = 5
@@ -133,12 +134,16 @@ class BaseAgent:
 
             # Inject result into conversation for next iteration
             tool_messages.append({"role": "assistant", "content": response_text})
+            tool_result_text = (
+                f"Tool '{tool_name}' result:\n{result.output}"
+                if result.success
+                else f"Tool '{tool_name}' failed: {result.error}"
+            )
             tool_messages.append({
                 "role": "user",
                 "content": (
-                    f"Tool '{tool_name}' result:\n{result.output}"
-                    if result.success
-                    else f"Tool '{tool_name}' failed: {result.error}"
+                    f"{tool_result_text}\n\n"
+                    "(Remember: reply in the same language the user used.)"
                 ),
             })
 
@@ -146,7 +151,7 @@ class BaseAgent:
                 break
         else:
             # Hit MAX_TOOL_ITERATIONS — return what we have
-            full_response = "I reached the maximum number of tool calls. " + full_response
+            full_response = full_response
 
         return full_response
 

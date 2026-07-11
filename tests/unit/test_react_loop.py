@@ -94,7 +94,6 @@ async def test_react_loop_terminates_after_max_iterations(clean_registry: ToolRe
     await agent.run(session, "run a loop", hub)
     
     assert adapter.calls == 5
-    assert "I reached the maximum number of tool calls." in session.history[-1]["content"]
 
 
 @pytest.mark.asyncio

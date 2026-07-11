@@ -127,12 +127,16 @@ class WorkerAgent:
             tool_result = await tool_registry.execute(tool_name, params)
 
             messages.append({"role": "assistant", "content": result_text})
+            tool_result_text = (
+                f"Tool '{tool_name}' result:\n{tool_result.output}"
+                if tool_result.success
+                else f"Tool '{tool_name}' failed: {tool_result.error}"
+            )
             messages.append({
                 "role": "user",
                 "content": (
-                    f"Tool '{tool_name}' result:\n{tool_result.output}"
-                    if tool_result.success
-                    else f"Tool '{tool_name}' failed: {tool_result.error}"
+                    f"{tool_result_text}\n\n"
+                    "(Remember: reply in the same language the user used.)"
                 ),
             })
         else:
