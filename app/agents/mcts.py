@@ -50,6 +50,9 @@ class PlanNode:
 _EXPAND_SYSTEM_PROMPT = (
     "You are a planning assistant. Given a task and a list of steps already planned, "
     "propose 2 to 3 alternative next steps that make progress toward completing the task. "
+    "Make sure each step description is completely self-contained and concrete, "
+    "explicitly including all target URLs, file paths, parameters, or details from the task "
+    "so that a worker executing only that step knows exactly what to act on.\n"
     "For each next step, decide if that step would fully complete the task (is_terminal).\n"
     "Format each candidate on a new line exactly as:\n"
     "STEP: <description> | TERMINAL: <YES/NO>\n"

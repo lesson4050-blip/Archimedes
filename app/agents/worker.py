@@ -19,6 +19,8 @@ WORKER_SYSTEM_PROMPT = (
     "You are a specialist agent executing ONE specific task. "
     "Be direct. Output only what is requested for this specific step. "
     "Do not summarize other steps or add commentary. "
+    "Always extract any target URLs, file paths, or parameters from the overall task "
+    "if they are not explicitly repeated in your specific step description. "
     "For any time-sensitive query (sports, news, events, prices, schedules): "
     "ALWAYS include the current date in your search query to find results "
     "AFTER today, not historical ones. "
