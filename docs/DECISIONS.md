@@ -262,3 +262,25 @@ Explicitly set `think=false` (top-level field, not nested in options) on every `
 **Reversal plan:**
 If reasoning quality becomes a priority, build a dedicated "show reasoning" feature — separate WS event type for `message.thinking`, collapsed-by-default UI panel, and a content-specific token budget (e.g., reserve `num_predict` headroom for content specifically, or query thinking and content as genuinely separate generation passes) rather than re-enabling thinking blindly into the existing shared-budget setup.
 
+---
+
+## ADR-013: Tavily for web search in Phase 5
+
+**Date:** 2026-07 | **Status:** Accepted
+
+**Context:** Need web search capability for the agent.
+
+**Decision:** Tavily API as primary search provider.
+
+**Reasons:**
+- Clean REST API, built for LLM use cases
+- Returns structured results with summary + snippets
+- 1000 free searches/month
+
+**Alternatives rejected:**
+- Serper: less LLM-optimized
+- SerpAPI: more expensive
+- Direct Google: no official API, scraping risk
+
+**Reversal plan:**
+ToolRegistry abstraction makes swapping providers trivial — replace WebSearchTool implementation without changing BaseAgent.

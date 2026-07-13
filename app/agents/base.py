@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+import json
+import re
 from typing import TYPE_CHECKING
 
 from app.memory.chroma import add_memory, search_memories
@@ -17,8 +20,32 @@ SYSTEM_PROMPT = (
     "You are Archimedes, an autonomous AI agent. "
     "Be direct and concise. No filler phrases, no emojis. "
     "When executing a plan, focus on the task. "
-    "Respond in the same language the user writes in."
+    "ALWAYS respond in the same language the user writes in — this applies "
+    "to ALL responses including error messages and 'not found' replies. "
+    "If a tool returns no results or empty data, tell the user in their "
+    "language that you could not find the information. "
+    "NEVER invent numbers, facts, or URLs when search returns nothing."
 )
+
+TOOL_USE_PROMPT_SUFFIX = """
+{tool_descriptions}
+
+For any time-sensitive query (sports, news, events, prices, schedules):
+ALWAYS include the current date in your search query to find results
+AFTER today, not historical ones.
+Example: instead of 'next World Cup 2026 match'
+use 'next World Cup 2026 match after [today's date]'
+
+To use a tool, respond with EXACTLY this format (no other text before it):
+TOOL_CALL: tool_name
+PARAMS: {{"param_name": "value"}}
+
+After receiving tool results, continue your response normally.
+If you don't need any tools, respond directly without the TOOL_CALL prefix.
+IMPORTANT: Always reply in the same language the user used.
+"""
+
+MAX_TOOL_ITERATIONS = 5
 
 
 class BaseAgent:
@@ -31,6 +58,102 @@ class BaseAgent:
             adapter: The model adapter to use for generation.
         """
         self.adapter = adapter
+
+    async def _run_react_loop(
+        self,
+        messages: list[dict[str, str]],
+        session: Session,
+        hub: WSHub,
+    ) -> str:
+        """Run the ReAct loop: LLM calls tools until it has enough info to answer.
+
+        Args:
+            messages: The initial messages list (including system prompt).
+            session: The active Session instance.
+            hub: The WebSocket hub for event broadcasting.
+
+        Returns:
+            The final response string from the agent.
+        """
+        from app.tools.registry import tool_registry
+
+        tool_messages = list(messages)  # copy — don't mutate session history
+        full_response = ""
+
+        for iteration in range(MAX_TOOL_ITERATIONS):
+            chunks: list[str] = []
+            async for delta in self.adapter.stream(tool_messages, think=False):
+                if session.cancel_requested:
+                    break
+                chunks.append(delta)
+            response_text = "".join(chunks)
+
+            # Detect tool call
+            tool_match = re.search(
+                r"TOOL_CALL:\s*(\w+)\s+PARAMS:\s*(\{.*?\})",
+                response_text,
+                re.DOTALL,
+            )
+
+            if not tool_match:
+                # Stream already-collected chunks — no second LLM call
+                # chunks contains the real token deltas from the first stream() call
+                for chunk in chunks:
+                    if session.cancel_requested:
+                        break
+                    await hub.send_stream(session.id, chunk)
+                full_response = response_text
+                break
+
+            tool_name = tool_match.group(1).strip()
+            try:
+                params = json.loads(tool_match.group(2))
+            except Exception:
+                params = {}
+
+            # Stream tool_call event to frontend
+            await hub.broadcast(session.id, {
+                "type": "tool_call",
+                "session_id": session.id,
+                "payload": {"tool": tool_name, "input": params},
+            })
+
+            # Execute tool
+            result = await tool_registry.execute(tool_name, params)
+
+            # Stream tool_result event to frontend
+            await hub.broadcast(session.id, {
+                "type": "tool_result",
+                "session_id": session.id,
+                "payload": {
+                    "tool": tool_name,
+                    "success": result.success,
+                    "output": result.output if result.success else result.error,
+                },
+            })
+
+            # Inject result into conversation for next iteration
+            tool_messages.append({"role": "assistant", "content": response_text})
+            tool_result_text = (
+                f"Tool '{tool_name}' result:\n{result.output}"
+                if result.success
+                else f"Tool '{tool_name}' failed: {result.error}"
+            )
+            tool_messages.append({
+                "role": "user",
+                "content": (
+                    f"{tool_result_text}\n\n"
+                    "(Remember: reply in the same language the user used.)"
+                ),
+            })
+
+            if session.cancel_requested:
+                break
+        else:
+            # Hit MAX_TOOL_ITERATIONS — return what we have
+            full_response = full_response
+
+        return full_response
 
     async def run(
         self,
@@ -72,17 +195,27 @@ class BaseAgent:
         completed_successfully = False
         full_response = ""
         try:
-            # Explicitly disable thinking mode (ADR-012) to avoid latency inflation
-            # and token starvation/truncation, since reasoning is not surfaced in UI.
+            from app.tools.registry import tool_registry
+
+            tool_desc = tool_registry.tool_descriptions_for_prompt()
+            current_date_str = datetime.now().strftime("%B %d, %Y")
+            system_content = f"{SYSTEM_PROMPT}\n\nCurrent Date: {current_date_str}"
+            if tool_registry.all_tools():
+                system_content += f"\n\n{TOOL_USE_PROMPT_SUFFIX.format(tool_descriptions=tool_desc)}"
+
             messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_content},
                 *session.history,
             ]
-            async for delta in self.adapter.stream(messages, think=False):
-                if session.cancel_requested:
-                    break
-                full_response += delta
-                await hub.send_stream(session.id, delta)
+
+            if tool_registry.all_tools():
+                full_response = await self._run_react_loop(messages, session, hub)
+            else:
+                async for delta in self.adapter.stream(messages, think=False):
+                    if session.cancel_requested:
+                        break
+                    full_response += delta
+                    await hub.send_stream(session.id, delta)
 
             # Record final assistant response in history
             session.history.append({"role": "assistant", "content": full_response})
@@ -99,4 +232,5 @@ class BaseAgent:
         await add_memory(session.user_id, session.id, "user", message)
         if completed_successfully:
             await add_memory(session.user_id, session.id, "assistant", full_response)
+
 

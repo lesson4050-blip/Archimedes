@@ -34,6 +34,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     # ── Startup ─────────────────────────────────────────────
     # TODO(phase-1): init SQLite, ChromaDB, WS hub
+    from app.tools.search import WebSearchTool
+    from app.tools.browser import BrowserTool
+    from app.tools.registry import tool_registry
+
+    tool_registry.register(WebSearchTool())
+    tool_registry.register(BrowserTool())
+    logger.info(f"Tools registered: {[t.name for t in tool_registry.all_tools()]}")
+
     logger.info("WebSocket hub initialized")
     yield
     # ── Shutdown ────────────────────────────────────────────

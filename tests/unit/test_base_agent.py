@@ -1,10 +1,6 @@
-"""Unit tests for the BaseAgent class."""
-
-from __future__ import annotations
-
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Generator
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -12,7 +8,16 @@ from app.agents.base import BaseAgent, SYSTEM_PROMPT
 from app.core.session import Session
 from app.core.ws_hub import WSHub
 from app.models.base import ModelAdapter
+from app.tools.registry import ToolRegistry
 import pytest_mock
+
+
+@pytest.fixture(autouse=True)
+def clean_registry_for_base_agent_tests() -> Generator[None, None, None]:
+    """Ensure the tool registry is empty for these tests so they use the direct stream path."""
+    empty_registry = ToolRegistry()
+    with patch("app.tools.registry.tool_registry", new=empty_registry):
+        yield
 
 
 class MockAdapter(ModelAdapter):
@@ -77,8 +82,10 @@ async def test_agent_appends_assistant_message_to_history() -> None:
         assert msg.get("role") != "system" or msg.get("content") != SYSTEM_PROMPT
 
     # Verify adapter received the prepended system prompt
+    from datetime import datetime
+    expected_system_content = f"{SYSTEM_PROMPT}\n\nCurrent Date: {datetime.now().strftime('%B %d, %Y')}"
     assert len(adapter.calls) == 1
-    assert adapter.calls[0]["messages"][0] == {"role": "system", "content": SYSTEM_PROMPT}
+    assert adapter.calls[0]["messages"][0] == {"role": "system", "content": expected_system_content}
 
 
 @pytest.mark.asyncio

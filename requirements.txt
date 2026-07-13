@@ -35,6 +35,9 @@ httpx>=0.28.0
 # Browser Automation
 playwright>=1.49.0
 
+# Web Search (no-key fallback)
+duckduckgo-search>=8.0.0
+
 # Async
 anyio>=4.7.0
 aiofiles>=24.1.0
@@ -58,3 +61,6 @@ pytest-mock>=3.14.0
 mypy>=1.13.0
 types-passlib>=1.7.7
 types-cachetools>=5.5.0
+
+# HTML Parsing
+beautifulsoup4>=4.12.0

@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 from collections.abc import AsyncIterator
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
-from app.agents.worker import WorkerAgent, WORKER_SYSTEM_PROMPT
+from app.agents.worker import (
+    WorkerAgent,
+    WORKER_SYSTEM_PROMPT,
+    MAX_WORKER_TOOL_ITERATIONS,
+)
 from app.memory.blackboard import SharedBlackboard, BlackboardEntry
 from app.models.base import ModelAdapter
+from app.tools.base import BaseTool, ToolResult
+from app.tools.registry import ToolRegistry
 
 
 @pytest.mark.asyncio
@@ -74,7 +80,7 @@ async def test_worker_includes_prerequisites_in_messages(mock_run_sem: MagicMock
     """Verify that WorkerAgent includes prerequisite context in its user message."""
     mock_run_sem.return_value = "worker output"
     blackboard = SharedBlackboard()
-    
+
     # Write a prereq to blackboard
     await blackboard.write(
         0,
@@ -101,12 +107,200 @@ async def test_worker_includes_prerequisites_in_messages(mock_run_sem: MagicMock
     mock_run_sem.assert_called_once()
     called_messages = mock_run_sem.call_args[0][1]
 
-    # Verify message structure
+    # Verify message structure — system content includes WORKER_SYSTEM_PROMPT
+    # (may be followed by tool descriptions and current date)
     assert len(called_messages) == 2
-    assert called_messages[0] == {"role": "system", "content": WORKER_SYSTEM_PROMPT}
-    
+    assert called_messages[0]["role"] == "system"
+    assert WORKER_SYSTEM_PROMPT in called_messages[0]["content"]
+
     user_content = called_messages[1]["content"]
     assert "Overall task: Do complex task" in user_content
     assert "Context from previous steps:" in user_content
     assert "Step 1 (Subtask A): Result A" in user_content
     assert "Your specific step: Subtask B" in user_content
+
+
+# ── New tests ─────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+@patch("app.agents.worker.tool_registry")
+@patch("app.agents.worker._run_with_semaphore")
+async def test_worker_uses_tool_when_tool_call_detected(
+    mock_run_sem: MagicMock,
+    mock_registry: MagicMock,
+) -> None:
+    """Worker detects TOOL_CALL, executes tool, feeds result back, writes final answer."""
+    # First LLM call: emit a tool call; second: emit the final answer
+    mock_run_sem.side_effect = [
+        "TOOL_CALL: fake_tool\nPARAMS: {\"query\": \"test\"}",
+        "Final answer after tool",
+    ]
+
+    # Fake tool that succeeds
+    class _FakeTool(BaseTool):
+        name: str = "fake_tool"
+        description: str = "A fake tool"
+        parameters_schema: dict[str, str] = {"query": "The query"}
+
+        async def execute(self, **kwargs: str) -> ToolResult:  # type: ignore[override]
+            return ToolResult(tool_name="fake_tool", success=True, output="tool output")
+
+    fake_registry = ToolRegistry()
+    fake_registry.register(_FakeTool())
+
+    mock_registry.all_tools.return_value = fake_registry.all_tools()
+    mock_registry.tool_descriptions_for_prompt.return_value = (
+        fake_registry.tool_descriptions_for_prompt()
+    )
+    mock_registry.execute = AsyncMock(
+        return_value=ToolResult(tool_name="fake_tool", success=True, output="tool output")
+    )
+
+    blackboard = SharedBlackboard()
+    adapter = MagicMock(spec=ModelAdapter)
+    worker = WorkerAgent(
+        worker_id="tool-worker",
+        step_index=0,
+        step_description="Search for something",
+        adapter=adapter,
+        blackboard=blackboard,
+    )
+
+    result = await worker.execute("Multi-step task", dep_indices=set())
+
+    assert result == "Final answer after tool"
+    assert mock_run_sem.call_count == 2
+    mock_registry.execute.assert_called_once_with("fake_tool", {"query": "test"})
+
+    entry = await blackboard.read(0)
+    assert entry is not None
+    assert entry.result == "Final answer after tool"
+
+
+@pytest.mark.asyncio
+@patch("app.agents.worker.tool_registry")
+@patch("app.agents.worker._run_with_semaphore")
+async def test_worker_respects_max_worker_tool_iterations(
+    mock_run_sem: MagicMock,
+    mock_registry: MagicMock,
+) -> None:
+    """Worker always emitting TOOL_CALL must exit loop after MAX_WORKER_TOOL_ITERATIONS calls."""
+
+    class _FakeTool(BaseTool):
+        name: str = "looping_tool"
+        description: str = "Loops forever"
+        parameters_schema: dict[str, str] = {}
+
+        async def execute(self, **kwargs: str) -> ToolResult:  # type: ignore[override]
+            return ToolResult(tool_name="looping_tool", success=True, output="looped")
+
+    fake_registry = ToolRegistry()
+    fake_registry.register(_FakeTool())
+
+    mock_registry.all_tools.return_value = fake_registry.all_tools()
+    mock_registry.tool_descriptions_for_prompt.return_value = (
+        fake_registry.tool_descriptions_for_prompt()
+    )
+    mock_registry.execute = AsyncMock(
+        return_value=ToolResult(tool_name="looping_tool", success=True, output="looped")
+    )
+
+    # Always return a TOOL_CALL for loop iterations, then a clean answer for
+    # the forced summary call after loop exhaustion.
+    tool_call_text = "TOOL_CALL: looping_tool\nPARAMS: {}"
+    mock_run_sem.side_effect = [tool_call_text] * MAX_WORKER_TOOL_ITERATIONS + [
+        "Summary after exhausted loop"
+    ]
+
+    blackboard = SharedBlackboard()
+    adapter = MagicMock(spec=ModelAdapter)
+    worker = WorkerAgent(
+        worker_id="loop-worker",
+        step_index=0,
+        step_description="Loop forever",
+        adapter=adapter,
+        blackboard=blackboard,
+    )
+
+    result = await worker.execute("Infinite loop task", dep_indices=set())
+
+    # LLM called MAX_WORKER_TOOL_ITERATIONS times in-loop + 1 forced summary
+    assert mock_run_sem.call_count == MAX_WORKER_TOOL_ITERATIONS + 1
+    assert result == "Summary after exhausted loop"
+
+
+@pytest.mark.asyncio
+@patch("app.agents.worker._run_with_semaphore")
+async def test_worker_runs_directly_when_no_tool_call(mock_run_sem: MagicMock) -> None:
+    """Worker with plain-text response makes exactly one LLM call and writes result."""
+    mock_run_sem.return_value = "Direct answer, no tools needed"
+
+    blackboard = SharedBlackboard()
+    adapter = MagicMock(spec=ModelAdapter)
+    worker = WorkerAgent(
+        worker_id="direct-worker",
+        step_index=0,
+        step_description="Answer directly",
+        adapter=adapter,
+        blackboard=blackboard,
+    )
+
+    result = await worker.execute("Simple task", dep_indices=set())
+
+    assert result == "Direct answer, no tools needed"
+    mock_run_sem.assert_called_once()
+
+    entry = await blackboard.read(0)
+    assert entry is not None
+    assert entry.result == "Direct answer, no tools needed"
+
+
+@pytest.mark.asyncio
+@patch("app.agents.worker.tool_registry")
+@patch("app.agents.worker._run_with_semaphore")
+async def test_worker_uses_tool_on_single_line_tool_call(
+    mock_run_sem: MagicMock,
+    mock_registry: MagicMock,
+) -> None:
+    """Worker detects single-line TOOL_CALL: tool PARAMS: {} (no newline), executes it, and works."""
+    mock_run_sem.side_effect = [
+        "TOOL_CALL: fake_tool PARAMS: {\"query\": \"test\"}",
+        "Final answer after single-line tool",
+    ]
+
+    class _FakeTool(BaseTool):
+        name: str = "fake_tool"
+        description: str = "A fake tool"
+        parameters_schema: dict[str, str] = {"query": "The query"}
+
+        async def execute(self, **kwargs: str) -> ToolResult:  # type: ignore[override]
+            return ToolResult(tool_name="fake_tool", success=True, output="tool output")
+
+    fake_registry = ToolRegistry()
+    fake_registry.register(_FakeTool())
+
+    mock_registry.all_tools.return_value = fake_registry.all_tools()
+    mock_registry.tool_descriptions_for_prompt.return_value = (
+        fake_registry.tool_descriptions_for_prompt()
+    )
+    mock_registry.execute = AsyncMock(
+        return_value=ToolResult(tool_name="fake_tool", success=True, output="tool output")
+    )
+
+    blackboard = SharedBlackboard()
+    adapter = MagicMock(spec=ModelAdapter)
+    worker = WorkerAgent(
+        worker_id="single-line-worker",
+        step_index=0,
+        step_description="Search single line",
+        adapter=adapter,
+        blackboard=blackboard,
+    )
+
+    result = await worker.execute("Single-line task", dep_indices=set())
+
+    assert result == "Final answer after single-line tool"
+    assert mock_run_sem.call_count == 2
+    mock_registry.execute.assert_called_once_with("fake_tool", {"query": "test"})
+
