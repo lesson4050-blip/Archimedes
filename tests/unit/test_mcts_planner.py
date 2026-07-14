@@ -182,3 +182,23 @@ async def test_expand_includes_tool_descriptions_when_tools_registered() -> None
     finally:
         tool_registry._tools = original_tools
 
+
+@pytest.mark.anyio
+async def test_expand_deduplicates_identical_steps() -> None:
+    """Test that _expand removes duplicate steps produced by the LLM."""
+    # The LLM returns three steps but the first two are identical.
+    expand_response = (
+        "STEP: use web_search to find latest news | TERMINAL: NO\n"
+        "STEP: use web_search to find latest news | TERMINAL: NO\n"
+        "STEP: summarize findings for the user | TERMINAL: YES"
+    )
+    adapter = _ScriptedAdapter([expand_response, "0.5"])
+    planner = MCTSPlanner(adapter, max_iterations=1)
+    root = PlanNode(action=None, parent=None, depth=0)
+    children = await planner._expand(root, "find latest news")
+
+    # Only 2 unique children should remain (duplicate removed)
+    assert len(children) == 2
+    actions = [c.action for c in children]
+    assert actions[0] == "use web_search to find latest news"
+    assert actions[1] == "summarize findings for the user"

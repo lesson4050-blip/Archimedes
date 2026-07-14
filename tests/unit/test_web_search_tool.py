@@ -93,7 +93,10 @@ async def test_search_tool_formats_tavily_results_correctly() -> None:
             mock_post.assert_called_once()
             called_json = mock_post.call_args[1]["json"]
             assert called_json["api_key"] == "tvly-mock-key"
-            assert called_json["query"] == "my search"
+            
+            from datetime import datetime, timezone
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            assert called_json["query"] == f"my search {today}"
 
 
 @pytest.mark.asyncio

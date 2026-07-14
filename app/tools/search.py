@@ -121,6 +121,10 @@ class WebSearchTool(BaseTool):
         Uses Tavily when TAVILY_API_KEY is present and not the placeholder value.
         Falls back to DuckDuckGo automatically — no API key required.
 
+        Automatically appends the current date to every query so that
+        time-sensitive searches (sports, news, prices) always return
+        fresh results — even when the LLM forgets to include the date.
+
         Args:
             query: The search query string.
             **kwargs: Extra parameters (ignored).
@@ -135,6 +139,15 @@ class WebSearchTool(BaseTool):
                 output="",
                 error="query cannot be empty",
             )
+
+        # Programmatically inject current date into query so search
+        # engines prioritise fresh results. The LLM often forgets to
+        # include the date despite being told to in the system prompt.
+        from datetime import datetime, timezone
+
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if today not in query:
+            query = f"{query} {today}"
 
         settings = get_settings()
         tavily_key: str = getattr(settings, "tavily_api_key", "") or ""
