@@ -144,15 +144,37 @@ class MCTSPlanner:
         plan_steps.reverse()
 
         plan_str = "\n".join(f"- {step}" for step in plan_steps) if plan_steps else "None"
-        user_content = (
+
+        # Tool descriptions injected here so planner generates concrete
+        # tool-calling steps instead of abstract "search the web" steps
+        # that workers can't execute without knowing which tool to use.
+        from app.tools.registry import tool_registry
+
+        tool_desc = tool_registry.tool_descriptions_for_prompt()
+        tool_context = ""
+        if tool_desc and "No tools" not in tool_desc:
+            tool_context = (
+                f"\nAvailable tools you can use in your plan steps:\n"
+                f"{tool_desc}\n"
+                f"When a step requires searching or reading web pages, "
+                f"explicitly name the tool in the step description.\n"
+            )
+
+        current_path_str = plan_str
+        prompt = (
             f"Task: {task}\n"
-            f"Steps planned so far:\n{plan_str}\n\n"
-            "Propose 2-3 candidate next steps."
+            f"Current plan so far: {current_path_str}\n"
+            f"{tool_context}"
+            f"Propose 2-3 concrete next steps to complete this task. "
+            f"Each step must be specific and actionable. "
+            f"If searching is needed, specify: use web_search to find X. "
+            f"If reading a page is needed, specify: use read_webpage on URL. "
+            f"Number each step on its own line: 1. ... 2. ... 3. ..."
         )
 
         messages = [
             {"role": "system", "content": _EXPAND_SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
+            {"role": "user", "content": prompt},
         ]
 
         try:
