@@ -145,3 +145,60 @@ async def test_mcts_passes_think_false_to_all_stream_calls() -> None:
     for call in adapter.calls:
         assert call["think"] is False
 
+
+@pytest.mark.anyio
+async def test_expand_includes_tool_descriptions_when_tools_registered() -> None:
+    """Test that MCTSPlanner._expand includes registered tool descriptions in the prompt."""
+    from app.tools.registry import tool_registry
+    from app.tools.base import BaseTool, ToolResult
+
+    class FakeSearchTool(BaseTool):
+        name: str = "fake_search"
+        description: str = "Use this to search fake stuff."
+        parameters_schema: dict[str, str] = {"query": "the search query"}
+
+        async def execute(self, *, query: str = "", **kwargs: str) -> ToolResult:
+            return ToolResult(tool_name=self.name, success=True, output="fake output")
+
+    original_tools = dict(tool_registry._tools)
+    try:
+        tool_registry.register(FakeSearchTool())
+
+        adapter = _ScriptedAdapter([])
+        planner = MCTSPlanner(adapter)
+        node = PlanNode(action=None, parent=None, depth=0)
+        
+        await planner._expand(node, "find latest news")
+
+        # Assert that there was at least one call to the LLM
+        assert len(adapter.calls) > 0
+        # Assert that the prompt passed to the adapter contained the tool name and description
+        last_call_messages = adapter.calls[-1]["messages"]
+        user_message_content = next(
+            msg["content"] for msg in last_call_messages if msg["role"] == "user"
+        )
+        assert "fake_search" in user_message_content
+        assert "Use this to search fake stuff" in user_message_content
+    finally:
+        tool_registry._tools = original_tools
+
+
+@pytest.mark.anyio
+async def test_expand_deduplicates_identical_steps() -> None:
+    """Test that _expand removes duplicate steps produced by the LLM."""
+    # The LLM returns three steps but the first two are identical.
+    expand_response = (
+        "STEP: use web_search to find latest news | TERMINAL: NO\n"
+        "STEP: use web_search to find latest news | TERMINAL: NO\n"
+        "STEP: summarize findings for the user | TERMINAL: YES"
+    )
+    adapter = _ScriptedAdapter([expand_response, "0.5"])
+    planner = MCTSPlanner(adapter, max_iterations=1)
+    root = PlanNode(action=None, parent=None, depth=0)
+    children = await planner._expand(root, "find latest news")
+
+    # Only 2 unique children should remain (duplicate removed)
+    assert len(children) == 2
+    actions = [c.action for c in children]
+    assert actions[0] == "use web_search to find latest news"
+    assert actions[1] == "summarize findings for the user"

@@ -24,7 +24,9 @@ SYSTEM_PROMPT = (
     "to ALL responses including error messages and 'not found' replies. "
     "If a tool returns no results or empty data, tell the user in their "
     "language that you could not find the information. "
-    "NEVER invent numbers, facts, or URLs when search returns nothing."
+    "NEVER invent numbers, facts, or URLs when search returns nothing. "
+    "Your knowledge is static. You MUST use the search tool for any current events, "
+    "schedules, sports results, news, or real-time data instead of guessing directly."
 )
 
 TOOL_USE_PROMPT_SUFFIX = """

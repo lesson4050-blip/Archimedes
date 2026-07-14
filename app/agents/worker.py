@@ -25,7 +25,9 @@ WORKER_SYSTEM_PROMPT = (
     "ALWAYS include the current date in your search query to find results "
     "AFTER today, not historical ones. "
     "Example: instead of 'next World Cup 2026 match' "
-    "use 'next World Cup 2026 match after [today's date]'."
+    "use 'next World Cup 2026 match after [today's date]'. "
+    "You MUST use the appropriate tools to look up any real-time, current, or time-sensitive "
+    "information instead of answering from memory or making lazy guesses."
 )
 
 

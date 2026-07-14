@@ -49,7 +49,11 @@ class PlanNode:
 
 _EXPAND_SYSTEM_PROMPT = (
     "You are a planning assistant. Given a task and a list of steps already planned, "
-    "propose 2 to 3 alternative next steps that make progress toward completing the task. "
+    "propose 2 to 3 DIFFERENT next steps that each make distinct progress toward "
+    "completing the task. "
+    "CRITICAL: Every step MUST be unique — never propose two steps with the same "
+    "action or search query. If the task has multiple parts, each step should "
+    "address a DIFFERENT part. "
     "Make sure each step description is completely self-contained and concrete, "
     "explicitly including all target URLs, file paths, parameters, or details from the task "
     "so that a worker executing only that step knows exactly what to act on.\n"
@@ -144,15 +148,39 @@ class MCTSPlanner:
         plan_steps.reverse()
 
         plan_str = "\n".join(f"- {step}" for step in plan_steps) if plan_steps else "None"
-        user_content = (
+
+        # Tool descriptions injected here so planner generates concrete
+        # tool-calling steps instead of abstract "search the web" steps
+        # that workers can't execute without knowing which tool to use.
+        from app.tools.registry import tool_registry
+
+        tool_desc = tool_registry.tool_descriptions_for_prompt()
+        tool_context = ""
+        if tool_desc and "No tools" not in tool_desc:
+            tool_context = (
+                f"\nAvailable tools you can use in your plan steps:\n"
+                f"{tool_desc}\n"
+                f"When a step requires searching or reading web pages, "
+                f"explicitly name the tool in the step description.\n"
+            )
+
+        current_path_str = plan_str
+        prompt = (
             f"Task: {task}\n"
-            f"Steps planned so far:\n{plan_str}\n\n"
-            "Propose 2-3 candidate next steps."
+            f"Current plan so far: {current_path_str}\n"
+            f"{tool_context}"
+            f"Propose 2-3 concrete next steps to complete this task. "
+            f"Each step MUST be DIFFERENT — do NOT repeat the same action or query. "
+            f"If the task has multiple parts, propose one step per part. "
+            f"Each step must be specific and actionable. "
+            f"If searching is needed, specify: use web_search to find X. "
+            f"If reading a page is needed, specify: use read_webpage on URL. "
+            f"Number each step on its own line: 1. ... 2. ... 3. ..."
         )
 
         messages = [
             {"role": "system", "content": _EXPAND_SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
+            {"role": "user", "content": prompt},
         ]
 
         try:
@@ -166,6 +194,7 @@ class MCTSPlanner:
             return []
 
         children: list[PlanNode] = []
+        seen_actions: set[str] = set()
         for line in raw.split("\n"):
             line = line.strip()
             if not line:
@@ -177,6 +206,13 @@ class MCTSPlanner:
             term_part = parts[1].replace("TERMINAL:", "").strip().upper()
             if not step_part:
                 continue
+            # Deduplicate: skip steps whose normalised text matches a
+            # previously seen action so the plan never contains identical
+            # siblings produced by an imprecise LLM.
+            normalised = step_part.lower().strip()
+            if normalised in seen_actions:
+                continue
+            seen_actions.add(normalised)
             is_terminal = "YES" in term_part or "TRUE" in term_part
             children.append(PlanNode(
                 action=step_part,
