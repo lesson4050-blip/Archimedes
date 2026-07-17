@@ -218,8 +218,7 @@ class MCTSPlanner:
                     elif "NO" in right_part or "FALSE" in right_part:
                         is_terminal = False
                     else:
-                        # e.g., "TERMINAL" by itself
-                        is_terminal = True
+                        is_terminal = False  # require explicit YES/NO/TRUE/FALSE
 
             action = None
             step_match = step_pattern.match(main_part)

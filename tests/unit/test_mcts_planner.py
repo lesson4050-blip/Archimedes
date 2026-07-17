@@ -243,7 +243,7 @@ async def test_expand_parses_step_pipe_format() -> None:
     assert children[0].action == "first step"
     assert children[0].is_terminal is False
     assert children[1].action == "second step"
-    assert children[1].is_terminal is True
+    assert children[1].is_terminal is False
     assert children[2].action == "third step"
     assert children[2].is_terminal is True
 
