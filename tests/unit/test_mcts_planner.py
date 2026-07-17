@@ -202,3 +202,77 @@ async def test_expand_deduplicates_identical_steps() -> None:
     actions = [c.action for c in children]
     assert actions[0] == "use web_search to find latest news"
     assert actions[1] == "summarize findings for the user"
+
+
+@pytest.mark.anyio
+async def test_expand_parses_numbered_list_format() -> None:
+    """Test that _expand successfully parses numbered list format steps."""
+    expand_response = (
+        "1. Do the first thing\n"
+        "2) Do the second thing\n"
+        "3. Do the third thing | TERMINAL: YES"
+    )
+    adapter = _ScriptedAdapter([expand_response])
+    planner = MCTSPlanner(adapter)
+    root = PlanNode(action=None, parent=None, depth=0)
+    children = await planner._expand(root, "test task")
+
+    assert len(children) == 3
+    assert children[0].action == "Do the first thing"
+    assert children[0].is_terminal is False
+    assert children[1].action == "Do the second thing"
+    assert children[1].is_terminal is False
+    assert children[2].action == "Do the third thing"
+    assert children[2].is_terminal is True
+
+
+@pytest.mark.anyio
+async def test_expand_parses_step_pipe_format() -> None:
+    """Test that _expand successfully parses STEP: ... | TERMINAL formats."""
+    expand_response = (
+        "STEP 1: first step | TERMINAL: NO\n"
+        "STEP: second step | TERMINAL\n"
+        "STEP 3: third step | TERMINAL: YES"
+    )
+    adapter = _ScriptedAdapter([expand_response])
+    planner = MCTSPlanner(adapter)
+    root = PlanNode(action=None, parent=None, depth=0)
+    children = await planner._expand(root, "test task")
+
+    assert len(children) == 3
+    assert children[0].action == "first step"
+    assert children[0].is_terminal is False
+    assert children[1].action == "second step"
+    assert children[1].is_terminal is True
+    assert children[2].action == "third step"
+    assert children[2].is_terminal is True
+
+
+@pytest.mark.anyio
+async def test_expand_parses_mixed_format_gracefully() -> None:
+    """Test that _expand successfully parses mixed formats (STEP, numbered list, bullet)."""
+    expand_response = (
+        "STEP 1: first step | TERMINAL: NO\n"
+        "2. second step\n"
+        "- third step | TERMINAL: YES\n"
+        "Invalid format line that should be skipped\n"
+        "- fourth step"
+    )
+    adapter = _ScriptedAdapter([expand_response])
+    planner = MCTSPlanner(adapter)
+    root = PlanNode(action=None, parent=None, depth=0)
+    children = await planner._expand(root, "test task")
+
+    assert len(children) == 4
+    assert children[0].action == "first step"
+    assert children[0].is_terminal is False
+
+    assert children[1].action == "second step"
+    assert children[1].is_terminal is False
+
+    assert children[2].action == "third step"
+    assert children[2].is_terminal is True
+
+    assert children[3].action == "fourth step"
+    assert children[3].is_terminal is False
+
