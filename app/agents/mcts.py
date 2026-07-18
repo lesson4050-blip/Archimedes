@@ -175,7 +175,7 @@ class MCTSPlanner:
             f"Each step must be specific and actionable. "
             f"If searching is needed, specify: use web_search to find X. "
             f"If reading a page is needed, specify: use read_webpage on URL. "
-            f"Number each step on its own line: 1. ... 2. ... 3. ..."
+            f"Format each candidate on a new line exactly as: STEP: <description> | TERMINAL: <YES/NO>"
         )
 
         messages = [
@@ -193,29 +193,59 @@ class MCTSPlanner:
         except Exception:
             return []
 
+        # Define format patterns (case-insensitive for STEP)
+        step_pattern = re.compile(r"^\s*STEP(?:\s+\d+)?\s*:\s*(.*)$", re.IGNORECASE)
+        numbered_pattern = re.compile(r"^\s*\d+[\.\)]\s*(.*)$")
+        bullet_pattern = re.compile(r"^\s*-\s*(.*)$")
+
         children: list[PlanNode] = []
         seen_actions: set[str] = set()
         for line in raw.split("\n"):
             line = line.strip()
             if not line:
                 continue
-            if "|" not in line or "STEP:" not in line:
+
+            # Extract terminal status if present
+            is_terminal = False
+            main_part = line
+            if "|" in line:
+                parts = line.split("|", 1)
+                right_part = parts[1].upper()
+                if "TERMINAL" in right_part:
+                    main_part = parts[0].strip()
+                    if "YES" in right_part or "TRUE" in right_part:
+                        is_terminal = True
+                    elif "NO" in right_part or "FALSE" in right_part:
+                        is_terminal = False
+                    else:
+                        is_terminal = False  # require explicit YES/NO/TRUE/FALSE
+
+            action = None
+            step_match = step_pattern.match(main_part)
+            if step_match:
+                action = step_match.group(1).strip()
+            else:
+                num_match = numbered_pattern.match(main_part)
+                if num_match:
+                    action = num_match.group(1).strip()
+                else:
+                    bullet_match = bullet_pattern.match(main_part)
+                    if bullet_match:
+                        action = bullet_match.group(1).strip()
+
+            if not action:
                 continue
-            parts = line.split("|", 1)
-            step_part = parts[0].replace("STEP:", "").strip()
-            term_part = parts[1].replace("TERMINAL:", "").strip().upper()
-            if not step_part:
-                continue
+
             # Deduplicate: skip steps whose normalised text matches a
             # previously seen action so the plan never contains identical
             # siblings produced by an imprecise LLM.
-            normalised = step_part.lower().strip()
+            normalised = action.lower().strip()
             if normalised in seen_actions:
                 continue
             seen_actions.add(normalised)
-            is_terminal = "YES" in term_part or "TRUE" in term_part
+
             children.append(PlanNode(
-                action=step_part,
+                action=action,
                 parent=node,
                 depth=node.depth + 1,
                 is_terminal=is_terminal,
